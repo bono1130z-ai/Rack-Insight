@@ -1,0 +1,144 @@
+"""Rack CRUD and 42U layout read/write."""
+import uuid
+
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import delete as sa_delete
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from auth.dependencies import get_current_user, require_admin
+from database import get_db
+from models import Rack, RackUnit
+from schemas.rack import (
+    RackCreate,
+    RackLayoutResponse,
+    RackLayoutUpdate,
+    RackResponse,
+    RackUnitResponse,
+    RackUpdate,
+)
+from utils.logging import get_logger
+
+logger = get_logger(__name__)
+router = APIRouter(prefix="/racks", tags=["racks"], dependencies=[Depends(get_current_user)])
+
+
+async def _get_rack(db: AsyncSession, rack_id: uuid.UUID) -> Rack:
+    result = await db.execute(select(Rack).where(Rack.id == rack_id))
+    rack = result.scalar_one_or_none()
+    if rack is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rack not found")
+    return rack
+
+
+@router.get("/{rack_id}", response_model=RackResponse)
+async def get_rack(rack_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> Rack:
+    return await _get_rack(db, rack_id)
+
+
+@router.get("/{rack_id}/layout", response_model=RackLayoutResponse)
+async def get_rack_layout(
+    rack_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> RackLayoutResponse:
+    rack = await _get_rack(db, rack_id)
+    result = await db.execute(
+        select(RackUnit)
+        .where(RackUnit.rack_id == rack_id)
+        .options(selectinload(RackUnit.device))
+        .order_by(RackUnit.u_position.desc())
+    )
+    units = list(result.scalars().all())
+    return RackLayoutResponse(
+        rack=RackResponse.model_validate(rack),
+        units=[RackUnitResponse.model_validate(u) for u in units],
+    )
+
+
+@router.put(
+    "/{rack_id}/layout",
+    response_model=RackLayoutResponse,
+    dependencies=[Depends(require_admin)],
+)
+async def update_rack_layout(
+    rack_id: uuid.UUID, payload: RackLayoutUpdate, db: AsyncSession = Depends(get_db)
+) -> RackLayoutResponse:
+    rack = await _get_rack(db, rack_id)
+    try:
+        occupied: set[int] = set()
+        for entry in payload.units:
+            span = set(range(entry.u_position, entry.u_position + entry.height))
+            if entry.u_position + entry.height - 1 > rack.height:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"U{entry.u_position} exceeds rack height {rack.height}U",
+                )
+            if span & occupied:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail=f"Overlapping units at U{entry.u_position}",
+                )
+            occupied |= span
+
+        await db.execute(sa_delete(RackUnit).where(RackUnit.rack_id == rack_id))
+        for entry in payload.units:
+            db.add(
+                RackUnit(
+                    rack_id=rack_id,
+                    u_position=entry.u_position,
+                    height=entry.height,
+                    device_id=entry.device_id,
+                )
+            )
+        await db.commit()
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as exc:
+        await db.rollback()
+        logger.exception("Rack layout update failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Layout update failed"
+        ) from exc
+    return await get_rack_layout(rack_id, db)
+
+
+@router.post(
+    "",
+    response_model=RackResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
+)
+async def create_rack(payload: RackCreate, db: AsyncSession = Depends(get_db)) -> Rack:
+    try:
+        rack = Rack(**payload.model_dump())
+        db.add(rack)
+        await db.commit()
+        await db.refresh(rack)
+        return rack
+    except Exception as exc:
+        logger.exception("Rack creation failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Rack creation failed"
+        ) from exc
+
+
+@router.patch("/{rack_id}", response_model=RackResponse, dependencies=[Depends(require_admin)])
+async def update_rack(
+    rack_id: uuid.UUID, payload: RackUpdate, db: AsyncSession = Depends(get_db)
+) -> Rack:
+    rack = await _get_rack(db, rack_id)
+    for key, value in payload.model_dump(exclude_unset=True).items():
+        setattr(rack, key, value)
+    await db.commit()
+    await db.refresh(rack)
+    return rack
+
+
+@router.delete(
+    "/{rack_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)]
+)
+async def delete_rack(rack_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> None:
+    rack = await _get_rack(db, rack_id)
+    await db.delete(rack)
+    await db.commit()

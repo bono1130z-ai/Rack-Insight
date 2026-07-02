@@ -1,0 +1,245 @@
+export type UserRole = "ADMIN" | "USER";
+export type DeviceType = "SERVER" | "SWITCH" | "PDU" | "KVM" | "OTHER";
+export type DeviceStatus = "ONLINE" | "OFFLINE" | "WARNING" | "UNKNOWN";
+
+export interface Me {
+  id: string;
+  username: string;
+  role: UserRole;
+  last_login: string | null;
+}
+
+export interface TokenPair {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+}
+
+export interface User {
+  id: string;
+  username: string;
+  role: UserRole;
+  enabled: boolean;
+  last_login: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ClusterSummary {
+  id: string;
+  name: string;
+  vendor: string | null;
+  description: string | null;
+  rack_count: number;
+  server_count: number;
+  switch_count: number;
+  online_count: number;
+  warning_count: number;
+  last_refresh: string | null;
+}
+
+export interface RackSummary {
+  id: string;
+  cluster_id: string;
+  name: string;
+  location: string | null;
+  height: number;
+  description: string | null;
+  device_count: number;
+  online_count: number;
+  offline_count: number;
+  warning_count: number;
+}
+
+export interface Device {
+  id: string;
+  rack_id: string;
+  hostname: string;
+  display_name: string | null;
+  device_type: DeviceType;
+  vendor: string | null;
+  model: string | null;
+  management_ip: string | null;
+  ilo_ip: string | null;
+  ilo_username: string | null;
+  ssh_username: string | null;
+  status: DeviceStatus;
+  enabled: boolean;
+}
+
+export interface DeviceDetail extends Device {
+  health_score: number | null;
+  health_label: string | null;
+  last_refresh: string | null;
+  serial: string | null;
+}
+
+export interface LayoutDevice {
+  id: string;
+  hostname: string;
+  display_name: string | null;
+  device_type: DeviceType;
+  vendor: string | null;
+  model: string | null;
+  management_ip: string | null;
+  ilo_ip: string | null;
+  status: DeviceStatus;
+}
+
+export interface RackUnit {
+  id: string;
+  u_position: number;
+  height: number;
+  device: LayoutDevice | null;
+}
+
+export interface RackLayout {
+  rack: {
+    id: string;
+    cluster_id: string;
+    name: string;
+    location: string | null;
+    height: number;
+    description: string | null;
+  };
+  units: RackUnit[];
+}
+
+export interface CPU {
+  id: string;
+  socket: string | null;
+  vendor: string | null;
+  model: string | null;
+  cores: number | null;
+  threads: number | null;
+  frequency: string | null;
+  cache: string | null;
+  microcode: string | null;
+  serial: string | null;
+}
+
+export interface MemoryDimm {
+  id: string;
+  slot: string | null;
+  vendor: string | null;
+  part_number: string | null;
+  serial: string | null;
+  capacity_gb: number | null;
+  speed: string | null;
+  type: string | null;
+  ecc: boolean | null;
+  status: string | null;
+}
+
+export interface NIC {
+  id: string;
+  name: string | null;
+  vendor: string | null;
+  model: string | null;
+  mac: string | null;
+  firmware: string | null;
+  driver: string | null;
+  speed: string | null;
+  pci_slot: string | null;
+  serial: string | null;
+  link_status: string | null;
+}
+
+export interface Firmware {
+  id: string;
+  component: string | null;
+  version: string | null;
+  release_date: string | null;
+  health: string | null;
+}
+
+export interface Disk {
+  id: string;
+  slot: string | null;
+  vendor: string | null;
+  model: string | null;
+  serial: string | null;
+  capacity: string | null;
+  firmware: string | null;
+  health: string | null;
+}
+
+export interface Storage {
+  id: string;
+  controller: string | null;
+  raid_level: string | null;
+  vendor: string | null;
+  model: string | null;
+  serial: string | null;
+  capacity: string | null;
+  firmware: string | null;
+  health: string | null;
+  disks: Disk[];
+}
+
+export interface NetworkInterface {
+  id: string;
+  interface: string | null;
+  ipv4: string | null;
+  ipv6: string | null;
+  gateway: string | null;
+  dns: string | null;
+  vlan: string | null;
+  bond: string | null;
+  mtu: number | null;
+  speed: string | null;
+  duplex: string | null;
+  mac: string | null;
+}
+
+export interface VM {
+  id: string;
+  name: string | null;
+  uuid: string | null;
+  state: string | null;
+  vcpu: number | null;
+  memory: string | null;
+  os: string | null;
+  kernel: string | null;
+  ip: string | null;
+}
+
+export interface Sensor {
+  id: string;
+  type: string | null;
+  name: string | null;
+  value: string | null;
+  unit: string | null;
+  status: string | null;
+}
+
+export interface SwitchInventory {
+  id: string;
+  model: string | null;
+  ios_version: string | null;
+  serial: string | null;
+  uptime: string | null;
+}
+
+export interface SnapshotMeta {
+  id: string;
+  collected_at: string;
+  collector_version: string;
+  redfish_success: boolean;
+  ssh_success: boolean;
+  virsh_success: boolean;
+  duration_ms: number;
+}
+
+export interface DeviceInventory {
+  snapshot: SnapshotMeta | null;
+  cpus: CPU[];
+  memories: MemoryDimm[];
+  nics: NIC[];
+  firmwares: Firmware[];
+  storages: Storage[];
+  networks: NetworkInterface[];
+  vms: VM[];
+  sensors: Sensor[];
+  switch: SwitchInventory | null;
+}
