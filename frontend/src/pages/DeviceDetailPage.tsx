@@ -31,6 +31,7 @@ import {
   useRackLayout,
   useRefreshDevice,
 } from "@/hooks/queries";
+import { useAuthStore } from "@/stores/auth";
 
 const TABS = [
   { id: "overview", label: "Overview", Icon: Layers },
@@ -52,6 +53,8 @@ export function DeviceDetailPage() {
   const { data: rackLayout } = useRackLayout(device?.rack_id ?? "");
   const { data: cluster } = useCluster(rackLayout?.rack.cluster_id ?? "");
   const refresh = useRefreshDevice(deviceId);
+  const { user } = useAuthStore();
+  const isAdmin = user?.role === "ADMIN";
 
   if (deviceLoading || !device) {
     return (
@@ -97,12 +100,16 @@ export function DeviceDetailPage() {
             {device.last_refresh ? new Date(device.last_refresh).toLocaleString() : "Never"}
           </p>
         </div>
-        <div className="ml-auto">
-          <Button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
-            <RefreshCw className={refresh.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-            {refresh.isPending ? "Refreshing…" : "Refresh"}
-          </Button>
-        </div>
+        {isAdmin && (
+          <div className="ml-auto">
+            <Button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
+              <RefreshCw
+                className={refresh.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+              />
+              {refresh.isPending ? "Refreshing…" : "Refresh"}
+            </Button>
+          </div>
+        )}
       </div>
 
       {(isError || refresh.isError) && (
@@ -112,14 +119,16 @@ export function DeviceDetailPage() {
           {inventory?.snapshot &&
             ` (last success: ${new Date(inventory.snapshot.collected_at).toLocaleString()})`}
           .
-          <Button
-            variant="outline"
-            size="sm"
-            className="ml-auto"
-            onClick={() => refresh.mutate()}
-          >
-            Retry
-          </Button>
+          {isAdmin && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="ml-auto"
+              onClick={() => refresh.mutate()}
+            >
+              Retry
+            </Button>
+          )}
         </div>
       )}
 

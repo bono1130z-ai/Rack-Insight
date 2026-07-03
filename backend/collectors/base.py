@@ -27,6 +27,8 @@ class DeviceCredentials:
     ssh_username: str | None = None
     ssh_password: str | None = None
     snmp_community: str | None = None
+    # Explicit collector selection from Device.collector_types; None means auto.
+    collector_types: frozenset[str] | None = None
 
 
 @dataclass
@@ -54,10 +56,18 @@ class BaseCollector(ABC):
     """Abstract collector with retry + timing built in."""
 
     name: str = "base"
+    # Which Device.collector_types entry enables this collector (None = always).
+    collector_type: str | None = None
 
     def __init__(self, timeout_seconds: int, retry_count: int) -> None:
         self.timeout_seconds = timeout_seconds
         self.retry_count = retry_count
+
+    def type_enabled(self, creds: DeviceCredentials) -> bool:
+        """Honor the device's explicit collector type selection, if any."""
+        if creds.collector_types is None or self.collector_type is None:
+            return True
+        return self.collector_type in creds.collector_types
 
     def applicable(self, creds: DeviceCredentials) -> bool:
         """Whether this collector can run for the given device."""
@@ -69,7 +79,7 @@ class BaseCollector(ABC):
 
     async def collect(self, creds: DeviceCredentials) -> CollectorResult:
         """Run collection with retries. Never raises."""
-        if not self.applicable(creds):
+        if not self.type_enabled(creds) or not self.applicable(creds):
             logger.info("Collector %s skipped for %s (not applicable)", self.name, creds.hostname)
             return CollectorResult(collector_name=self.name, skipped=True)
 

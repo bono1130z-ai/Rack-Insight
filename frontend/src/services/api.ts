@@ -1,6 +1,9 @@
 import { useAuthStore } from "@/stores/auth";
 import type {
   ClusterSummary,
+  CollectorDeviceStatus,
+  CollectorRun,
+  Credential,
   Device,
   DeviceDetail,
   DeviceInventory,
@@ -80,20 +83,23 @@ export const api = {
   me: () => request<Me>("/auth/me"),
 
   clusters: () => request<ClusterSummary[]>("/clusters"),
-  createCluster: (payload: { name: string; vendor?: string; description?: string }) =>
+  createCluster: (payload: Record<string, unknown>) =>
     request<ClusterSummary>("/clusters", { method: "POST", body: JSON.stringify(payload) }),
+  updateCluster: (id: string, payload: Record<string, unknown>) =>
+    request<ClusterSummary>(`/clusters/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
   deleteCluster: (id: string) => request<void>(`/clusters/${id}`, { method: "DELETE" }),
   clusterRacks: (clusterId: string) =>
     request<RackSummary[]>(`/clusters/${clusterId}/racks`),
   cluster: (clusterId: string) =>
     request<ClusterSummary>(`/clusters/${clusterId}`),
 
-  createRack: (payload: {
-    cluster_id: string;
-    name: string;
-    location?: string;
-    height?: number;
-  }) => request<RackSummary>("/racks", { method: "POST", body: JSON.stringify(payload) }),
+  createRack: (payload: Record<string, unknown>) =>
+    request<RackSummary>("/racks", { method: "POST", body: JSON.stringify(payload) }),
+  updateRack: (id: string, payload: Record<string, unknown>) =>
+    request<RackSummary>(`/racks/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteRack: (id: string) => request<void>(`/racks/${id}`, { method: "DELETE" }),
   rackLayout: (rackId: string) => request<RackLayout>(`/racks/${rackId}/layout`),
   updateRackLayout: (
@@ -121,6 +127,26 @@ export const api = {
     request<DeviceInventory>(`/devices/${deviceId}/inventory`),
   refreshDevice: (deviceId: string) =>
     request<DeviceInventory>(`/devices/${deviceId}/refresh`, { method: "POST" }),
+  moveDevice: (deviceId: string, payload: { u_position: number; height?: number }) =>
+    request<Device>(`/devices/${deviceId}/position`, {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    }),
+
+  credentials: () => request<Credential[]>("/credentials"),
+  createCredential: (payload: Record<string, unknown>) =>
+    request<Credential>("/credentials", { method: "POST", body: JSON.stringify(payload) }),
+  updateCredential: (id: string, payload: Record<string, unknown>) =>
+    request<Credential>(`/credentials/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteCredential: (id: string) =>
+    request<void>(`/credentials/${id}`, { method: "DELETE" }),
+
+  collectorStatus: () => request<CollectorDeviceStatus[]>("/collector/status"),
+  collectorLogs: (deviceId: string) =>
+    request<CollectorRun[]>(`/collector/devices/${deviceId}/logs`),
 
   users: () => request<User[]>("/users"),
   createUser: (payload: { username: string; password: string; role: string }) =>

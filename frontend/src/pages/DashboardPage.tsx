@@ -1,15 +1,52 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
-import { Boxes, Network, Server as ServerIcon } from "lucide-react";
+import { Boxes, Network, Plus, Server as ServerIcon } from "lucide-react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Field } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { EmptyState } from "@/components/EmptyState";
 import { useClusters } from "@/hooks/queries";
+import { api, ApiError } from "@/services/api";
+import { useAuthStore } from "@/stores/auth";
+import { toast } from "@/stores/toast";
 
 export function DashboardPage() {
   const { data: clusters, isLoading } = useClusters();
+  const { user } = useAuthStore();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [createOpen, setCreateOpen] = useState(false);
+  const [form, setForm] = useState({ name: "", site: "", vendor: "" });
+
+  const createCluster = useMutation({
+    mutationFn: () =>
+      api.createCluster({
+        name: form.name,
+        site: form.site || null,
+        vendor: form.vendor || null,
+      }),
+    onSuccess: (cluster) => {
+      toast.success("Cluster created", form.name);
+      setCreateOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ["clusters"] });
+      // Take the admin straight to the (empty) rack list of the new cluster.
+      navigate(`/clusters/${cluster.id}`);
+    },
+    onError: (err) =>
+      toast.error(
+        "Create failed",
+        err instanceof ApiError ? err.message : "Unexpected error",
+      ),
+  });
+
+  const isAdmin = user?.role === "ADMIN";
 
   return (
     <div className="flex flex-col gap-4">
@@ -20,6 +57,23 @@ export function DashboardPage() {
             <Skeleton key={i} className="h-40" />
           ))}
         </div>
+      ) : clusters?.length === 0 ? (
+        <EmptyState
+          Icon={Boxes}
+          title="No clusters yet"
+          description={
+            isAdmin
+              ? "Create your first cluster, then add racks and register devices — all from the web UI."
+              : "No clusters have been configured yet. Ask an administrator to create one."
+          }
+          action={
+            isAdmin ? (
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" /> Create Cluster
+              </Button>
+            ) : undefined
+          }
+        />
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {clusters?.map((cluster) => (
@@ -62,13 +116,51 @@ export function DashboardPage() {
               </Card>
             </motion.div>
           ))}
-          {clusters?.length === 0 && (
-            <p className="text-sm text-gray-500">
-              No clusters yet. An administrator can create one via the API or admin tools.
-            </p>
-          )}
         </div>
       )}
+
+      <Dialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        title="Create Cluster"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => createCluster.mutate()}
+              disabled={!form.name || createCluster.isPending}
+            >
+              {createCluster.isPending ? "Creating…" : "Create"}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <Field label="Cluster Name *">
+            <Input
+              value={form.name}
+              autoFocus
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </Field>
+          <Field label="Site">
+            <Input
+              value={form.site}
+              placeholder="e.g. Seoul DC1 Room 3"
+              onChange={(e) => setForm({ ...form, site: e.target.value })}
+            />
+          </Field>
+          <Field label="Vendor">
+            <Input
+              value={form.vendor}
+              placeholder="e.g. HPE"
+              onChange={(e) => setForm({ ...form, vendor: e.target.value })}
+            />
+          </Field>
+        </div>
+      </Dialog>
     </div>
   );
 }

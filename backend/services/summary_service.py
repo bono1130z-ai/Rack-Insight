@@ -24,6 +24,7 @@ async def cluster_summaries(db: AsyncSession) -> list[ClusterSummary]:
                 (await db.execute(select(Device).where(Device.rack_id.in_(rack_ids))))
                 .scalars().all()
             )
+            summary.device_count = len(devices)
             summary.server_count = sum(
                 1 for d in devices if d.device_type == DeviceType.SERVER
             )

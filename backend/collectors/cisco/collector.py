@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 
 class CiscoCollector(BaseCollector):
     name = "cisco"
+    collector_type = "CISCO"
 
     def applicable(self, creds: DeviceCredentials) -> bool:
         return (

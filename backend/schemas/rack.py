@@ -17,6 +17,7 @@ class RackCreate(BaseModel):
 
 
 class RackUpdate(BaseModel):
+    cluster_id: uuid.UUID | None = None
     name: str | None = Field(default=None, min_length=1, max_length=128)
     location: str | None = None
     height: int | None = Field(default=None, ge=1, le=60)

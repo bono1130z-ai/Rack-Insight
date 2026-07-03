@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 
 class VirshCollector(BaseCollector):
     name = "virsh"
+    collector_type = "SSH"  # virsh runs over the same SSH channel
 
     def applicable(self, creds: DeviceCredentials) -> bool:
         return (

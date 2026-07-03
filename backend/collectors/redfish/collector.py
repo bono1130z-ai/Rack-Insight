@@ -16,6 +16,7 @@ REDFISH_ROOT: str = "/redfish/v1"
 
 class RedfishCollector(BaseCollector):
     name = "redfish"
+    collector_type = "REDFISH"
 
     def applicable(self, creds: DeviceCredentials) -> bool:
         return (

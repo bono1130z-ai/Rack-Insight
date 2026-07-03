@@ -1,13 +1,16 @@
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion } from "framer-motion";
 import { KeyboardMusic, Network, Pencil, Plug, Server as ServerIcon } from "lucide-react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useCluster, useRackLayout } from "@/hooks/queries";
+import { api, ApiError } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
+import { toast } from "@/stores/toast";
 import type { DeviceStatus, DeviceType, RackUnit } from "@/types";
 
 const statusColor: Record<DeviceStatus, string> = {
@@ -59,6 +62,23 @@ export function RackDetailPage() {
   const { data: cluster } = useCluster(layout?.rack.cluster_id ?? "");
   const { user } = useAuthStore();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const [dragOverU, setDragOverU] = useState<number | null>(null);
+  const isAdmin = user?.role === "ADMIN";
+
+  const moveDevice = useMutation({
+    mutationFn: ({ deviceId, uPosition }: { deviceId: string; uPosition: number }) =>
+      api.moveDevice(deviceId, { u_position: uPosition }),
+    onSuccess: () => {
+      toast.success("Device moved");
+      void queryClient.invalidateQueries({ queryKey: ["rack", rackId, "layout"] });
+    },
+    onError: (err) =>
+      toast.error(
+        "Move failed",
+        err instanceof ApiError ? err.message : "Unexpected error",
+      ),
+  });
 
   const slots = useMemo(
     () => (layout ? buildSlots(layout.rack.height, layout.units) : []),
@@ -87,10 +107,19 @@ export function RackDetailPage() {
             { label: layout.rack.name },
           ]}
         />
-        {user?.role === "ADMIN" && (
-          <Button variant="outline" size="sm" onClick={() => navigate(`/racks/${rackId}/edit`)}>
-            <Pencil className="h-4 w-4" /> Edit Layout
-          </Button>
+        {isAdmin && (
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-gray-400">
+              Tip: drag a device onto an empty U to move it
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate(`/racks/${rackId}/edit`)}
+            >
+              <Pencil className="h-4 w-4" /> Edit Layout
+            </Button>
+          </div>
         )}
       </div>
 
@@ -108,7 +137,30 @@ export function RackDetailPage() {
               <div
                 key={slot.uPosition}
                 style={{ height: `${heightPercent}%` }}
-                className="flex items-center border-b border-gray-700 px-2"
+                className={`flex items-center border-b border-gray-700 px-2 ${
+                  dragOverU === slot.uPosition ? "bg-blue-900/60" : ""
+                }`}
+                onDragOver={
+                  isAdmin
+                    ? (event) => {
+                        event.preventDefault();
+                        setDragOverU(slot.uPosition);
+                      }
+                    : undefined
+                }
+                onDragLeave={isAdmin ? () => setDragOverU(null) : undefined}
+                onDrop={
+                  isAdmin
+                    ? (event) => {
+                        event.preventDefault();
+                        setDragOverU(null);
+                        const deviceId = event.dataTransfer.getData("text/plain");
+                        if (deviceId) {
+                          moveDevice.mutate({ deviceId, uPosition: slot.uPosition });
+                        }
+                      }
+                    : undefined
+                }
               >
                 <span className="w-8 text-right text-[10px] text-gray-500">
                   {slot.uPosition}
@@ -129,8 +181,14 @@ export function RackDetailPage() {
               </span>
               <button
                 type="button"
+                draggable={isAdmin}
+                onDragStart={
+                  isAdmin
+                    ? (event) => event.dataTransfer.setData("text/plain", device.id)
+                    : undefined
+                }
                 onClick={() => navigate(`/devices/${device.id}`)}
-                className={`ml-2 flex flex-1 items-center gap-2 rounded border-l-4 px-3 text-left text-sm font-medium transition-transform hover:scale-[1.01] ${statusColor[device.status]}`}
+                className={`ml-2 flex flex-1 items-center gap-2 rounded border-l-4 px-3 text-left text-sm font-medium transition-transform hover:scale-[1.01] ${statusColor[device.status]} ${isAdmin ? "cursor-grab active:cursor-grabbing" : ""}`}
               >
                 <Icon className="h-4 w-4 shrink-0" />
                 <span className="truncate">{device.display_name ?? device.hostname}</span>

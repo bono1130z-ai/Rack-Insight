@@ -46,16 +46,43 @@ class CollectionOutcome:
 
 
 def build_credentials(device: Device) -> DeviceCredentials:
+    """Resolve connection info. Named credentials (Credential store) take
+    precedence over the legacy inline per-device fields."""
+    ilo_username = device.ilo_username
+    ilo_password = decrypt_secret(device.ilo_password_encrypted)
+    if device.redfish_credential is not None:
+        ilo_username = device.redfish_credential.username or ilo_username
+        ilo_password = decrypt_secret(device.redfish_credential.password_encrypted) or ilo_password
+
+    ssh_username = device.ssh_username
+    ssh_password = decrypt_secret(device.ssh_password_encrypted)
+    if device.ssh_credential is not None:
+        ssh_username = device.ssh_credential.username or ssh_username
+        ssh_password = decrypt_secret(device.ssh_credential.password_encrypted) or ssh_password
+
+    snmp_community = decrypt_secret(device.snmp_community_encrypted)
+    if device.snmp_credential is not None:
+        snmp_community = (
+            decrypt_secret(device.snmp_credential.password_encrypted) or snmp_community
+        )
+
+    collector_types: frozenset[str] | None = None
+    if device.collector_types:
+        collector_types = frozenset(
+            t.strip().upper() for t in device.collector_types.split(",") if t.strip()
+        )
+
     return DeviceCredentials(
         hostname=device.hostname,
         device_type=device.device_type.value,
         management_ip=device.management_ip,
         ilo_ip=device.ilo_ip,
-        ilo_username=device.ilo_username,
-        ilo_password=decrypt_secret(device.ilo_password_encrypted),
-        ssh_username=device.ssh_username,
-        ssh_password=decrypt_secret(device.ssh_password_encrypted),
-        snmp_community=decrypt_secret(device.snmp_community_encrypted),
+        ilo_username=ilo_username,
+        ilo_password=ilo_password,
+        ssh_username=ssh_username,
+        ssh_password=ssh_password,
+        snmp_community=snmp_community,
+        collector_types=collector_types,
     )
 
 

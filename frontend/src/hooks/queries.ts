@@ -59,3 +59,23 @@ export function useRefreshDevice(deviceId: string) {
 export function useUsers() {
   return useQuery({ queryKey: ["users"], queryFn: api.users });
 }
+
+export function useCredentials() {
+  return useQuery({ queryKey: ["credentials"], queryFn: api.credentials });
+}
+
+export function useCollectorStatus() {
+  return useQuery({
+    queryKey: ["collector", "status"],
+    queryFn: api.collectorStatus,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useDevices(rackId?: string) {
+  return useQuery({
+    queryKey: ["devices", rackId ?? "all"],
+    queryFn: () => api.devices(rackId),
+    enabled: rackId === undefined || Boolean(rackId),
+  });
+}

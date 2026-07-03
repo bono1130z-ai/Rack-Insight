@@ -1,7 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/layouts/AppLayout";
+import { ClusterManagementPage } from "@/pages/admin/ClusterManagementPage";
+import { CollectorManagementPage } from "@/pages/admin/CollectorManagementPage";
+import { CredentialManagementPage } from "@/pages/admin/CredentialManagementPage";
+import { DeviceManagementPage } from "@/pages/admin/DeviceManagementPage";
 import { RackEditorPage } from "@/pages/admin/RackEditorPage";
+import { RackManagementPage } from "@/pages/admin/RackManagementPage";
 import { UserManagementPage } from "@/pages/admin/UserManagementPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DeviceDetailPage } from "@/pages/DeviceDetailPage";
@@ -42,10 +47,50 @@ export default function App() {
             />
             <Route path="/devices/:deviceId" element={<DeviceDetailPage />} />
             <Route
+              path="/admin/clusters"
+              element={
+                <AdminRoute>
+                  <ClusterManagementPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/racks"
+              element={
+                <AdminRoute>
+                  <RackManagementPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/devices"
+              element={
+                <AdminRoute>
+                  <DeviceManagementPage />
+                </AdminRoute>
+              }
+            />
+            <Route
               path="/admin/users"
               element={
                 <AdminRoute>
                   <UserManagementPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/credentials"
+              element={
+                <AdminRoute>
+                  <CredentialManagementPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/collectors"
+              element={
+                <AdminRoute>
+                  <CollectorManagementPage />
                 </AdminRoute>
               }
             />

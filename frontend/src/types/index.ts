@@ -29,8 +29,10 @@ export interface ClusterSummary {
   id: string;
   name: string;
   vendor: string | null;
+  site: string | null;
   description: string | null;
   rack_count: number;
+  device_count: number;
   server_count: number;
   switch_count: number;
   online_count: number;
@@ -51,6 +53,9 @@ export interface RackSummary {
   warning_count: number;
 }
 
+export type DeviceOrientation = "FRONT" | "REAR";
+export type CredentialType = "REDFISH" | "SSH" | "SNMP";
+
 export interface Device {
   id: string;
   rack_id: string;
@@ -65,6 +70,47 @@ export interface Device {
   ssh_username: string | null;
   status: DeviceStatus;
   enabled: boolean;
+  orientation: DeviceOrientation;
+  collector_types: string | null;
+  redfish_credential_id: string | null;
+  ssh_credential_id: string | null;
+  snmp_credential_id: string | null;
+}
+
+export interface Credential {
+  id: string;
+  name: string;
+  credential_type: CredentialType;
+  username: string | null;
+  description: string | null;
+  has_password: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CollectorRun {
+  id: string;
+  success: boolean;
+  duration_ms: number;
+  message: string | null;
+  trigger: string | null;
+  created_at: string;
+}
+
+export interface CollectorDeviceStatus {
+  device_id: string;
+  hostname: string;
+  display_name: string | null;
+  device_type: DeviceType;
+  status: DeviceStatus;
+  rack_name: string | null;
+  cluster_name: string | null;
+  last_snapshot_at: string | null;
+  last_success_at: string | null;
+  last_failure_at: string | null;
+  last_error: string | null;
+  health_score: number | null;
+  health_label: string | null;
 }
 
 export interface DeviceDetail extends Device {

@@ -11,6 +11,7 @@ logger = get_logger(__name__)
 
 class SSHCollector(BaseCollector):
     name = "ssh"
+    collector_type = "SSH"
 
     def applicable(self, creds: DeviceCredentials) -> bool:
         return (

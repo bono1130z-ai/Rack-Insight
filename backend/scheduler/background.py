@@ -10,6 +10,7 @@ from config import get_settings
 from database import async_session_factory
 from models import Device, DeviceStatus
 from services.inventory_service import load_snapshot_inventory
+from services.refresh_service import record_collector_run
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -30,6 +31,7 @@ async def _collect_all_online() -> None:
         for device in devices:
             try:
                 outcome = await manager.collect_device(db, device)
+                record_collector_run(db, device, outcome, trigger="scheduled")
                 device.status = outcome.status
                 await db.commit()
                 if outcome.snapshot is not None:

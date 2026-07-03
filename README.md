@@ -61,8 +61,33 @@ Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack 
 - **Security** — JWT access/refresh tokens, bcrypt password hashes, iLO/SSH/
   SNMP credentials encrypted at rest (Fernet), secrets never logged or
   returned by the API.
-- **Roles** — `ADMIN` manages clusters/racks/devices/users and can refresh;
-  `USER` has read-only access to all inventory views.
+- **Roles** — `ADMIN` manages clusters/racks/devices/users/credentials and can
+  run collectors; `USER` has read-only access to all inventory views and sees
+  no administration menus.
+
+### Admin Console
+
+Administrators get an **Administration** section in the left sidebar and can
+complete the entire initial setup from the web UI (no CLI / Swagger needed):
+
+- **Cluster Management** — CRUD with name / site / description, rack &
+  device counts, search.
+- **Rack Management** — per-cluster rack CRUD (height defaults to 42U),
+  delete confirmation.
+- **Device Management** — register servers/switches with vendor, model,
+  management IP, start U, height, orientation, collector types
+  (Redfish / SSH / Cisco) and stored-credential selection. Devices can be
+  repositioned by U selection or by drag & drop on the 42U rack view.
+- **User Management** — CRUD, ADMIN/USER role changes, password resets.
+- **Credential Management** — named Redfish / SSH / SNMP credentials,
+  encrypted at rest and never displayed after saving.
+- **Collector Management** — per-device Collect Now, last success/failure,
+  health score, last snapshot time and a per-device run log.
+
+> Schema note: the Admin Console added new tables/columns (credentials,
+> collector_runs, cluster.site, device orientation/collector types). Tables
+> are created automatically on startup; for an existing database from an
+> earlier version, recreate it or add the columns manually.
 
 ## Offline (Air-gapped) Deployment
 

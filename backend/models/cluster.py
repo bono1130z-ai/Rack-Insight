@@ -15,6 +15,7 @@ class Cluster(TimestampedModel):
 
     name: Mapped[str] = mapped_column(String(128), unique=True, nullable=False)
     vendor: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    site: Mapped[str | None] = mapped_column(String(255), nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     racks: Mapped[list["Rack"]] = relationship(
