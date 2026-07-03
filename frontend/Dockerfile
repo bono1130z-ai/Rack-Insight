@@ -1,8 +1,12 @@
+# Built on an internet-connected machine only (see scripts/offline/).
+# Stage 1 runs `npm ci` against the committed lockfile; the final image is
+# just nginx + static files, so the container never runs npm at runtime and
+# works without any internet access.
 FROM node:22-alpine AS build
 
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm install --no-audit --no-fund
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
 COPY . .
 RUN npm run build
 

@@ -1,3 +1,7 @@
+# Built on an internet-connected machine only (see scripts/offline/).
+# The resulting image is fully self-contained: all Python dependencies are
+# installed at build time, so the container never runs pip at runtime and
+# works without any internet access.
 FROM python:3.13-slim
 
 WORKDIR /app

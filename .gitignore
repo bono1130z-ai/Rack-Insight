@@ -19,3 +19,6 @@ dist/
 .vscode/
 .DS_Store
 *.tsbuildinfo
+
+# Offline deployment artifacts
+dist/

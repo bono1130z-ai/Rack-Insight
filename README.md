@@ -9,7 +9,14 @@ without touching iLO or SSH by hand.
 
 ## Quick Start
 
+`docker-compose.yml` references **pre-built images only** (no `build:`), so the
+images must exist locally first — either built on this machine (internet
+required, one time) or loaded from an offline archive (see
+[Offline Deployment](#offline-air-gapped-deployment)):
+
 ```bash
+# Internet-connected machine: build once, then start
+docker compose -f docker-compose.yml -f docker-compose.build.yml build
 docker compose up -d
 ```
 
@@ -57,6 +64,65 @@ Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack 
 - **Roles** — `ADMIN` manages clusters/racks/devices/users and can refresh;
   `USER` has read-only access to all inventory views.
 
+## Offline (Air-gapped) Deployment
+
+### 변경 이유 (Why)
+
+데이터센터 / 통신사 Core Network 서버실은 대부분 인터넷이 차단된
+**폐쇄망**입니다. 기존 구성처럼 `docker-compose.yml`에 `build:`가 있으면
+`docker compose up -d` 시점에 base image pull, `pip install`, `npm install`이
+필요해 폐쇄망에서는 기동이 불가능합니다.
+
+이를 해결하기 위해 다음과 같이 변경했습니다.
+
+1. **`docker-compose.yml`은 `image:`만 사용** — 폐쇄망 호스트에서는 빌드가
+   전혀 일어나지 않으며, `docker load`로 적재된 이미지를 그대로 실행합니다.
+2. **빌드는 인터넷 환경 전용 override로 분리** — `docker-compose.build.yml`
+   (pip/npm 의존성 설치는 모두 이 빌드 시점에 이미지 안에 포함됨).
+3. **Backend/Frontend 이미지는 self-contained** — 컨테이너 런타임에 pip,
+   npm, 외부 레지스트리 접근이 일절 없습니다. Frontend는 multi-stage 빌드로
+   nginx + 정적 파일만 남습니다.
+4. **`docker save` / `docker load` 스크립트 제공** — `scripts/offline/`.
+
+### 배포 절차 (Procedure)
+
+**1단계 — 인터넷 환경에서 이미지 빌드 & export:**
+
+```bash
+./scripts/offline/build_and_export.sh 0.1.0
+```
+
+이 스크립트는 다음을 수행합니다.
+
+- `rack-insight-backend:0.1.0`, `rack-insight-frontend:0.1.0` 빌드
+- 인프라 이미지 pull (`postgres:17-alpine`, `redis:7-alpine`, `nginx:1.27-alpine`)
+- 5개 이미지 전체를 `dist/rack-insight-images-0.1.0.tar.gz`로 `docker save`
+- 실행에 필요한 파일(compose, nginx 설정, env 예시, load 스크립트)을
+  `dist/rack-insight-deploy-0.1.0.tar.gz`로 패키징
+
+**2단계 — 두 아카이브를 폐쇄망으로 반입** (USB, 반입 서버 등):
+
+```
+rack-insight-images-0.1.0.tar.gz
+rack-insight-deploy-0.1.0.tar.gz
+```
+
+**3단계 — 폐쇄망(Linux) 호스트에서 load & 기동:**
+
+```bash
+tar -xzf rack-insight-deploy-0.1.0.tar.gz
+./scripts/offline/load_images.sh rack-insight-images-0.1.0.tar.gz
+docker compose up -d          # 인터넷 접속 없이 기동
+```
+
+버전 태그를 바꿔 빌드한 경우 `IMAGE_TAG`로 지정합니다
+(`IMAGE_TAG=0.2.0 docker compose up -d`). 이미지 이름 prefix는
+`IMAGE_PREFIX`(기본 `rack-insight`)로 변경할 수 있습니다.
+
+> 사전 요구사항: 폐쇄망 호스트에 Docker Engine + Docker Compose v2가 설치되어
+> 있어야 합니다(이 부분만은 OS 패키지 반입 등으로 별도 준비). 이후의 모든
+> 애플리케이션 구동은 인터넷 없이 동작합니다.
+
 ## Repository layout
 
 ```
@@ -65,6 +131,7 @@ backend/    FastAPI app: api/ auth/ cache/ collectors/ config/ database/
 frontend/   React app: pages/ layouts/ components/ features/ hooks/
             services/ stores/ types/ utils/
 docker/     nginx reverse-proxy config
+scripts/    offline build/export & load scripts (air-gapped deployment)
 ```
 
 ## Development
