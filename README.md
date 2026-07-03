@@ -202,6 +202,23 @@ pytest tests/              # test_migrations.py fails if models drift
 metadata and fails the build when a model change ships without a migration;
 it also verifies every migration can downgrade and re-upgrade.
 
+**Running Alembic inside Docker:** use the compose network so the `postgres`
+hostname resolves — a standalone `docker run` has no access to it and fails
+with `Name or service not known`:
+
+```bash
+docker compose exec backend alembic current      # correct
+docker run --rm -it rack-insight-backend:0.1.0 \
+  alembic current                                # wrong: not on the network
+```
+
+To inspect the schema state or logs when the backend restarts on boot:
+
+```bash
+docker logs rack-insight-backend-1 --tail 50
+docker compose exec postgres psql -U rackinsight -c '\d clusters'
+```
+
 ## Configuration
 
 All configuration is environment-driven — see `backend/.env.example`.

@@ -79,3 +79,62 @@ def test_migrations_up_and_down(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
     command.upgrade(config, "head")
 
     app_config.get_settings.cache_clear()
+
+
+def test_adopts_partial_create_all_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Regression: pre-Alembic create_all startups created the NEW TABLES
+    (credentials, collector_runs) but not the NEW COLUMNS (clusters.site,
+    devices.orientation, ...). Startup migration must adopt that mixed state
+    without DuplicateTable crashes."""
+    import asyncio
+    import sqlite3
+
+    from sqlalchemy import create_engine as sa_create_engine
+
+    from database.migrations import run_migrations
+    from models import CollectorRun, Credential
+
+    db_path = tmp_path / "partial.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{db_path}")
+    app_config.get_settings.cache_clear()
+
+    # 1) Old schema at revision 0001...
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    command.upgrade(config, "0001")
+
+    # 2) ...plus the new tables that create_all would have added, and no
+    #    alembic bookkeeping (exactly what a legacy deployment looks like).
+    sync_engine = sa_create_engine(f"sqlite:///{db_path}")
+    Base.metadata.create_all(
+        sync_engine, tables=[Credential.__table__, CollectorRun.__table__]
+    )
+    sync_engine.dispose()
+    conn = sqlite3.connect(db_path)
+    conn.execute("DROP TABLE alembic_version")
+    conn.execute(
+        "INSERT INTO clusters (id, name, created_at, updated_at) "
+        "VALUES ('1111', 'Legacy', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)"
+    )
+    conn.commit()
+    conn.close()
+
+    # 3) Startup migration must adopt and upgrade it in place.
+    asyncio.run(run_migrations())
+
+    conn = sqlite3.connect(db_path)
+    cluster_columns = [r[1] for r in conn.execute("PRAGMA table_info(clusters)")]
+    device_columns = [r[1] for r in conn.execute("PRAGMA table_info(devices)")]
+    revision = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+    preserved = conn.execute("SELECT name FROM clusters").fetchone()[0]
+    conn.close()
+
+    assert "site" in cluster_columns
+    assert "orientation" in device_columns
+    assert "redfish_credential_id" in device_columns
+    assert revision == "0002"
+    assert preserved == "Legacy"
+
+    app_config.get_settings.cache_clear()
