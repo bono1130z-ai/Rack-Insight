@@ -16,7 +16,8 @@ from api.routes import users as user_routes
 from auth.security import hash_password
 from cache.redis_cache import close_redis
 from config import get_settings
-from database import Base, async_session_factory, engine
+from database import async_session_factory, engine
+from database.migrations import run_migrations
 from models import User, UserRole
 from scheduler.background import start_scheduler, stop_scheduler
 from utils.logging import configure_logging, get_logger
@@ -44,8 +45,9 @@ async def _bootstrap_admin() -> None:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Schema is managed exclusively by Alembic migrations (never create_all),
+    # so model changes always require a migration — see alembic/versions/.
+    await run_migrations()
     await _bootstrap_admin()
     start_scheduler()
     logger.info("%s v%s started", settings.app_name, settings.app_version)

@@ -33,6 +33,18 @@ services:
 
   backend:
     image: ${IMAGE_PREFIX:-rack-insight}-backend:${IMAGE_TAG:-0.1.0}
+    # Applies Alembic migrations automatically on startup (upgrade head),
+    # so the schema is always in sync with the running code version.
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-rackinsight}:${POSTGRES_PASSWORD:-rackinsight}@postgres:5432/${POSTGRES_DB:-rackinsight}
       REDIS_URL: redis://redis:6379/0
@@ -51,7 +63,8 @@ services:
   frontend:
     image: ${IMAGE_PREFIX:-rack-insight}-frontend:${IMAGE_TAG:-0.1.0}
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
 
   nginx:
@@ -61,8 +74,10 @@ services:
     volumes:
       - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - frontend
-      - backend
+      backend:
+        condition: service_healthy
+      frontend:
+        condition: service_started
     restart: unless-stopped
 
 volumes:

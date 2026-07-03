@@ -84,10 +84,10 @@ complete the entire initial setup from the web UI (no CLI / Swagger needed):
 - **Collector Management** — per-device Collect Now, last success/failure,
   health score, last snapshot time and a per-device run log.
 
-> Schema note: the Admin Console added new tables/columns (credentials,
-> collector_runs, cluster.site, device orientation/collector types). Tables
-> are created automatically on startup; for an existing database from an
-> earlier version, recreate it or add the columns manually.
+> Schema note: all schema changes ship as Alembic migrations and are applied
+> automatically at startup — existing databases (including ones created by
+> older versions before Alembic was introduced) are upgraded in place with
+> data preserved. See "Database migrations" below.
 
 ## Offline (Air-gapped) Deployment
 
@@ -178,6 +178,29 @@ cd frontend
 npm install
 npm run dev                # proxies /api to http://localhost:8000
 ```
+
+### Database migrations (Alembic)
+
+The schema is managed **exclusively by Alembic** — the app never calls
+`create_all`. On startup the backend runs `alembic upgrade head`
+automatically, so containers always run against a schema matching their code
+version. Legacy databases created by pre-Alembic versions are detected and
+adopted in place (stamped at the matching revision, then upgraded — e.g.
+`ALTER TABLE clusters ADD COLUMN site VARCHAR(255)` is applied without data
+loss).
+
+**Whenever you change a model you MUST create a migration:**
+
+```bash
+cd backend
+alembic revision --autogenerate -m "describe the change"
+alembic upgrade head       # apply locally (startup also applies it)
+pytest tests/              # test_migrations.py fails if models drift
+```
+
+`tests/test_migrations.py` compares the migrated schema against the model
+metadata and fails the build when a model change ships without a migration;
+it also verifies every migration can downgrade and re-upgrade.
 
 ## Configuration
 
