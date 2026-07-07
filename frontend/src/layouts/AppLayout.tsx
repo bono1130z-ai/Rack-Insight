@@ -5,6 +5,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  Search,
   Server,
   Settings,
   UserCog,
@@ -94,6 +95,7 @@ export function AppLayout() {
         <aside className="w-60 shrink-0 border-r border-gray-200 bg-white p-3">
           <nav className="flex flex-col gap-1">
             <SidebarLink to="/" label="Dashboard" Icon={LayoutDashboard} />
+            <SidebarLink to="/search" label="Inventory Search" Icon={Search} />
             {isAdmin && (
               <>
                 <p className="mt-4 flex items-center gap-1.5 px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">

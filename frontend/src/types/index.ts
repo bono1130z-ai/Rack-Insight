@@ -99,6 +99,19 @@ export interface CollectorRun {
   created_at: string;
 }
 
+export interface DeviceSearchResult extends Device {
+  rack_name: string | null;
+  cluster_name: string | null;
+  cluster_id: string | null;
+}
+
+export interface DeviceSearchPage {
+  items: DeviceSearchResult[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface DashboardSummary {
   total_devices: number;
   online: number;

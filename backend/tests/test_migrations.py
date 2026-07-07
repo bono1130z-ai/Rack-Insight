@@ -146,3 +146,42 @@ def test_adopts_partial_create_all_database(
     assert preserved == "Legacy"
 
     app_config.get_settings.cache_clear()
+
+
+def test_adopts_full_create_all_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A create_all database from the last pre-Alembic release (0002 schema)
+    must be stamped at 0002 — never head — so later migrations still apply."""
+    import asyncio
+    import sqlite3
+
+    from alembic.script import ScriptDirectory
+
+    from database.migrations import run_migrations
+
+    db_path = tmp_path / "full_legacy.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{db_path}")
+    app_config.get_settings.cache_clear()
+
+    config = Config(str(BACKEND_DIR / "alembic.ini"))
+    config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    command.upgrade(config, "0002")
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("DROP TABLE alembic_version")
+    conn.commit()
+    conn.close()
+
+    asyncio.run(run_migrations())
+
+    conn = sqlite3.connect(db_path)
+    run_columns = [r[1] for r in conn.execute("PRAGMA table_info(collector_runs)")]
+    revision = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+    conn.close()
+
+    head = ScriptDirectory.from_config(config).get_current_head()
+    assert "error_code" in run_columns, "0003 must run on adopted legacy databases"
+    assert revision == head
+
+    app_config.get_settings.cache_clear()

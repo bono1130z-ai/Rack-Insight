@@ -91,3 +91,18 @@ class DevicePositionUpdate(BaseModel):
 
     u_position: int = Field(ge=1)
     height: int | None = Field(default=None, ge=1)
+
+
+class DeviceSearchResult(DeviceResponse):
+    rack_name: str | None = None
+    cluster_name: str | None = None
+    cluster_id: uuid.UUID | None = None
+
+
+class DeviceSearchPage(BaseModel):
+    """Server-side paginated search response (F5/F9)."""
+
+    items: list[DeviceSearchResult]
+    total: int
+    page: int
+    page_size: int

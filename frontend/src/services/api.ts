@@ -8,6 +8,7 @@ import type {
   Device,
   DeviceDetail,
   DeviceInventory,
+  DeviceSearchPage,
   Me,
   RackLayout,
   RackSummary,
@@ -116,6 +117,13 @@ export const api = {
 
   devices: (rackId?: string) =>
     request<Device[]>(`/devices${rackId ? `?rack_id=${rackId}` : ""}`),
+  searchDevices: (params: Record<string, string | number | undefined>) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== "") query.set(key, String(value));
+    }
+    return request<DeviceSearchPage>(`/devices/search?${query.toString()}`);
+  },
   device: (deviceId: string) => request<DeviceDetail>(`/devices/${deviceId}`),
   createDevice: (payload: Record<string, unknown>) =>
     request<Device>("/devices", { method: "POST", body: JSON.stringify(payload) }),

@@ -1,20 +1,32 @@
-"""Device CRUD, latest inventory, health, and refresh endpoints."""
+"""Device CRUD, search, latest inventory, health, and refresh endpoints."""
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import get_current_user, require_admin
 from cache.redis_cache import cache_delete, device_inventory_key
 from database import get_db
-from models import CPU, Device, Firmware, RackUnit, Sensor, Storage
+from models import (
+    CPU,
+    Device,
+    DeviceStatus,
+    Firmware,
+    Rack,
+    RackUnit,
+    Sensor,
+    Snapshot,
+    Storage,
+)
 from schemas.device import (
     VALID_COLLECTOR_TYPES,
     DeviceCreate,
     DeviceDetailResponse,
     DevicePositionUpdate,
     DeviceResponse,
+    DeviceSearchPage,
+    DeviceSearchResult,
     DeviceUpdate,
 )
 from schemas.inventory import DeviceInventoryResponse
@@ -65,6 +77,98 @@ async def list_devices(
         query = query.where(Device.rack_id == rack_id)
     result = await db.execute(query)
     return list(result.scalars().all())
+
+
+DEFAULT_PAGE_SIZE = 25
+MAX_PAGE_SIZE = 200
+
+
+def _serial_exists(pattern: str):
+    """EXISTS clause matching a serial in any snapshot's CPUs or storages."""
+    cpu_match = exists(
+        select(CPU.id)
+        .join(Snapshot, Snapshot.id == CPU.snapshot_id)
+        .where(Snapshot.device_id == Device.id, CPU.serial.ilike(pattern))
+    )
+    storage_match = exists(
+        select(Storage.id)
+        .join(Snapshot, Snapshot.id == Storage.snapshot_id)
+        .where(Snapshot.device_id == Device.id, Storage.serial.ilike(pattern))
+    )
+    return or_(cpu_match, storage_match)
+
+
+@router.get("/search", response_model=DeviceSearchPage)
+async def search_devices(
+    q: str | None = Query(default=None, description="Matches hostname, vendor, model, serial"),
+    hostname: str | None = None,
+    serial: str | None = None,
+    vendor: str | None = None,
+    model: str | None = None,
+    cluster_id: uuid.UUID | None = None,
+    rack_id: uuid.UUID | None = None,
+    device_status: DeviceStatus | None = Query(default=None, alias="status"),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+    db: AsyncSession = Depends(get_db),
+) -> DeviceSearchPage:
+    """Inventory search with filters and server-side pagination (F5)."""
+    try:
+        query = select(Device)
+        if q:
+            pattern = f"%{q}%"
+            query = query.where(
+                or_(
+                    Device.hostname.ilike(pattern),
+                    Device.display_name.ilike(pattern),
+                    Device.vendor.ilike(pattern),
+                    Device.model.ilike(pattern),
+                    _serial_exists(pattern),
+                )
+            )
+        if hostname:
+            query = query.where(
+                or_(
+                    Device.hostname.ilike(f"%{hostname}%"),
+                    Device.display_name.ilike(f"%{hostname}%"),
+                )
+            )
+        if serial:
+            query = query.where(_serial_exists(f"%{serial}%"))
+        if vendor:
+            query = query.where(Device.vendor.ilike(f"%{vendor}%"))
+        if model:
+            query = query.where(Device.model.ilike(f"%{model}%"))
+        if rack_id is not None:
+            query = query.where(Device.rack_id == rack_id)
+        if cluster_id is not None:
+            query = query.where(
+                Device.rack_id.in_(select(Rack.id).where(Rack.cluster_id == cluster_id))
+            )
+        if device_status is not None:
+            query = query.where(Device.status == device_status)
+
+        total = (
+            await db.execute(select(func.count()).select_from(query.subquery()))
+        ).scalar_one()
+        result = await db.execute(
+            query.order_by(Device.hostname).offset((page - 1) * page_size).limit(page_size)
+        )
+        items: list[DeviceSearchResult] = []
+        for device in result.scalars().all():
+            item = DeviceSearchResult.model_validate(device)
+            item.rack_name = device.rack.name if device.rack else None
+            item.cluster_name = (
+                device.rack.cluster.name if device.rack and device.rack.cluster else None
+            )
+            item.cluster_id = device.rack.cluster_id if device.rack else None
+            items.append(item)
+        return DeviceSearchPage(items=items, total=total, page=page, page_size=page_size)
+    except Exception as exc:
+        logger.exception("Device search failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Device search failed"
+        ) from exc
 
 
 @router.get("/{device_id}", response_model=DeviceDetailResponse)

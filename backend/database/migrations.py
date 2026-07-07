@@ -6,9 +6,9 @@ the latest Alembic revision (`upgrade head`). This replaces the previous
 tables (e.g. clusters.site).
 
 Databases created by older versions with create_all (no alembic_version
-table) are adopted automatically:
-- schema already current (clusters.site exists)  -> stamp head
-- pre-admin-console schema                       -> stamp 0001, then upgrade
+table) are adopted automatically at the revision matching their actual
+schema (0001 without clusters.site, otherwise 0002 — the last create_all
+release), then upgraded to head.
 """
 import asyncio
 from pathlib import Path
@@ -26,6 +26,9 @@ logger = get_logger(__name__)
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent
 BASELINE_REVISION = "0001"
+# create_all was removed at revision 0002; a legacy database can never be
+# newer than that, so adoption must stamp at most 0002 and then upgrade.
+LEGACY_LATEST_REVISION = "0002"
 
 
 def _alembic_config() -> Config:
@@ -65,7 +68,7 @@ async def run_migrations() -> None:
     if not has_version_table and has_clusters:
         # Legacy database created via create_all: register it with Alembic
         # at the revision matching its actual schema, then upgrade normally.
-        stamp_revision = "head" if has_site else BASELINE_REVISION
+        stamp_revision = LEGACY_LATEST_REVISION if has_site else BASELINE_REVISION
         logger.info(
             "Adopting legacy (create_all) database into Alembic at revision %s",
             stamp_revision,

@@ -13,6 +13,7 @@ import { DeviceDetailPage } from "@/pages/DeviceDetailPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { RackDetailPage } from "@/pages/RackDetailPage";
 import { RackListPage } from "@/pages/RackListPage";
+import { SearchPage } from "@/pages/SearchPage";
 import { useAuthStore } from "@/stores/auth";
 
 const queryClient = new QueryClient({
@@ -35,6 +36,7 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route element={<AppLayout />}>
             <Route path="/" element={<DashboardPage />} />
+            <Route path="/search" element={<SearchPage />} />
             <Route path="/clusters/:clusterId" element={<RackListPage />} />
             <Route path="/racks/:rackId" element={<RackDetailPage />} />
             <Route
