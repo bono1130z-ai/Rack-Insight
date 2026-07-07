@@ -104,6 +104,17 @@ export const api = {
     request<RackSummary>("/racks", { method: "POST", body: JSON.stringify(payload) }),
   updateRack: (id: string, payload: Record<string, unknown>) =>
     request<RackSummary>(`/racks/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  bulkCreateRacks: (payload: {
+    cluster_id: string;
+    prefix: string;
+    count: number;
+    height?: number;
+    location?: string | null;
+  }) =>
+    request<{ created: RackSummary[]; skipped: string[] }>("/racks/bulk", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
   deleteRack: (id: string) => request<void>(`/racks/${id}`, { method: "DELETE" }),
   rackLayout: (rackId: string) => request<RackLayout>(`/racks/${rackId}/layout`),
   updateRackLayout: (

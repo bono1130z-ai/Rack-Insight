@@ -11,6 +11,8 @@ from auth.dependencies import get_current_user, require_admin
 from database import get_db
 from models import Rack, RackUnit
 from schemas.rack import (
+    RackBulkCreate,
+    RackBulkCreateResult,
     RackCreate,
     RackLayoutResponse,
     RackLayoutUpdate,
@@ -120,6 +122,65 @@ async def create_rack(payload: RackCreate, db: AsyncSession = Depends(get_db)) -
         logger.exception("Rack creation failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Rack creation failed"
+        ) from exc
+
+
+@router.post(
+    "/bulk",
+    response_model=RackBulkCreateResult,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_admin)],
+)
+async def bulk_create_racks(
+    payload: RackBulkCreate, db: AsyncSession = Depends(get_db)
+) -> RackBulkCreateResult:
+    """Create prefix-N racks in one call; existing names are skipped (F7)."""
+    try:
+        names = [
+            f"{payload.prefix}-{index}"
+            for index in range(payload.start_index, payload.start_index + payload.count)
+        ]
+        existing = set(
+            (
+                await db.execute(
+                    select(Rack.name).where(
+                        Rack.cluster_id == payload.cluster_id, Rack.name.in_(names)
+                    )
+                )
+            )
+            .scalars().all()
+        )
+        created: list[Rack] = []
+        skipped: list[str] = []
+        for name in names:
+            if name in existing:
+                skipped.append(name)
+                continue
+            rack = Rack(
+                cluster_id=payload.cluster_id,
+                name=name,
+                height=payload.height,
+                location=payload.location,
+            )
+            db.add(rack)
+            created.append(rack)
+        await db.commit()
+        for rack in created:
+            await db.refresh(rack)
+        logger.info(
+            "Bulk rack creation: %d created, %d skipped (prefix=%s)",
+            len(created), len(skipped), payload.prefix,
+        )
+        return RackBulkCreateResult(
+            created=[RackResponse.model_validate(rack) for rack in created],
+            skipped=skipped,
+        )
+    except Exception as exc:
+        await db.rollback()
+        logger.exception("Bulk rack creation failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Bulk rack creation failed",
         ) from exc
 
 

@@ -82,3 +82,22 @@ class RackLayoutUpdate(BaseModel):
     """Full replacement of a rack layout (spreadsheet-style editor save)."""
 
     units: list[RackUnitEntry]
+
+
+MAX_BULK_RACKS = 100
+
+
+class RackBulkCreate(BaseModel):
+    """Create <count> racks named <prefix>-<start_index>.. (F7)."""
+
+    cluster_id: uuid.UUID
+    prefix: str = Field(min_length=1, max_length=100)
+    count: int = Field(ge=1, le=MAX_BULK_RACKS)
+    start_index: int = Field(default=1, ge=0)
+    height: int = Field(default=DEFAULT_RACK_HEIGHT_U, ge=1, le=60)
+    location: str | None = None
+
+
+class RackBulkCreateResult(BaseModel):
+    created: list[RackResponse]
+    skipped: list[str]

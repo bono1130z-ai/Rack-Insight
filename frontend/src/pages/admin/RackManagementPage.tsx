@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Boxes, Pencil, Plus, Trash2 } from "lucide-react";
+import { Boxes, Layers, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -33,6 +33,12 @@ export function RackManagementPage() {
   const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkForm, setBulkForm] = useState({
+    prefix: "",
+    count: 5,
+    height: DEFAULT_RACK_HEIGHT,
+  });
   const [editing, setEditing] = useState<RackSummary | null>(null);
   const [deleting, setDeleting] = useState<RackSummary | null>(null);
   const [form, setForm] = useState<RackForm>({
@@ -96,6 +102,30 @@ export function RackManagementPage() {
     },
     onError: (err) =>
       toast.error("Save failed", err instanceof ApiError ? err.message : "Unexpected error"),
+  });
+
+  const bulkCreate = useMutation({
+    mutationFn: () =>
+      api.bulkCreateRacks({
+        cluster_id: clusterId,
+        prefix: bulkForm.prefix,
+        count: bulkForm.count,
+        height: bulkForm.height,
+      }),
+    onSuccess: (result) => {
+      const skipped =
+        result.skipped.length > 0
+          ? ` (skipped existing: ${result.skipped.join(", ")})`
+          : "";
+      toast.success(`${result.created.length} racks created`, skipped || undefined);
+      setBulkOpen(false);
+      invalidate();
+    },
+    onError: (err) =>
+      toast.error(
+        "Bulk create failed",
+        err instanceof ApiError ? err.message : "Unexpected error",
+      ),
   });
 
   const remove = useMutation({
@@ -173,9 +203,14 @@ export function RackManagementPage() {
         isLoading={isLoading && Boolean(clusterId)}
         searchPlaceholder="Search racks…"
         toolbar={
-          <Button onClick={openCreate} disabled={!clusterId}>
-            <Plus className="h-4 w-4" /> Create Rack
-          </Button>
+          <>
+            <Button variant="outline" onClick={() => setBulkOpen(true)} disabled={!clusterId}>
+              <Layers className="h-4 w-4" /> Bulk Create
+            </Button>
+            <Button onClick={openCreate} disabled={!clusterId}>
+              <Plus className="h-4 w-4" /> Create Rack
+            </Button>
+          </>
         }
         emptyState={
           <EmptyState
@@ -251,6 +286,66 @@ export function RackManagementPage() {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </Field>
+        </div>
+      </Dialog>
+
+      <Dialog
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        title="Bulk Create Racks"
+        description="Creates <prefix>-1 … <prefix>-N. Existing names are skipped."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setBulkOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => bulkCreate.mutate()}
+              disabled={!bulkForm.prefix || bulkCreate.isPending}
+            >
+              {bulkCreate.isPending
+                ? "Creating…"
+                : `Create ${bulkForm.count} Racks`}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <Field label="Prefix *">
+            <Input
+              value={bulkForm.prefix}
+              autoFocus
+              placeholder="e.g. SMF"
+              onChange={(e) => setBulkForm({ ...bulkForm, prefix: e.target.value })}
+            />
+          </Field>
+          <Field label="Count">
+            <Input
+              type="number"
+              min={1}
+              max={100}
+              value={bulkForm.count}
+              onChange={(e) =>
+                setBulkForm({ ...bulkForm, count: Number(e.target.value) })
+              }
+            />
+          </Field>
+          <Field label="Height (U)">
+            <Input
+              type="number"
+              min={1}
+              max={60}
+              value={bulkForm.height}
+              onChange={(e) =>
+                setBulkForm({ ...bulkForm, height: Number(e.target.value) })
+              }
+            />
+          </Field>
+          {bulkForm.prefix && (
+            <p className="text-xs text-gray-500">
+              Will create: {bulkForm.prefix}-1 … {bulkForm.prefix}-{bulkForm.count}
+            </p>
+          )}
         </div>
       </Dialog>
 
