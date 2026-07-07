@@ -148,6 +148,31 @@ export const api = {
   collectorLogs: (deviceId: string) =>
     request<CollectorRun[]>(`/collector/devices/${deviceId}/logs`),
 
+  downloadExport: async (
+    scope: "device" | "rack" | "cluster" | "all",
+    format: "json" | "csv" | "xlsx",
+    targetId?: string,
+  ): Promise<void> => {
+    const { accessToken } = useAuthStore.getState();
+    const params = new URLSearchParams({ scope, format });
+    if (targetId) params.set("target_id", targetId);
+    const response = await fetch(`${API_BASE}/export?${params.toString()}`, {
+      headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    });
+    if (!response.ok) throw new ApiError(response.status, "Export failed");
+    const disposition = response.headers.get("Content-Disposition") ?? "";
+    const match = /filename="([^"]+)"/.exec(disposition);
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = match?.[1] ?? `rack-insight-export.${format === "csv" ? "zip" : format}`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  },
+
   users: () => request<User[]>("/users"),
   createUser: (payload: { username: string; password: string; role: string }) =>
     request<User>("/users", { method: "POST", body: JSON.stringify(payload) }),

@@ -12,6 +12,7 @@ import { Field } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { EmptyState } from "@/components/EmptyState";
+import { ExportMenu } from "@/components/ExportMenu";
 import { useClusters } from "@/hooks/queries";
 import { api, ApiError } from "@/services/api";
 import { useAuthStore } from "@/stores/auth";
@@ -50,7 +51,10 @@ export function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Breadcrumb crumbs={[{ label: "Clusters" }]} />
+      <div className="flex items-center justify-between">
+        <Breadcrumb crumbs={[{ label: "Clusters" }]} />
+        <ExportMenu scope="all" label="Export All" />
+      </div>
       {isLoading ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {Array.from({ length: 3 }).map((_, i) => (

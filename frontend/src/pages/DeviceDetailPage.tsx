@@ -15,6 +15,7 @@ import { useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { ExportMenu } from "@/components/ExportMenu";
 import { HealthBadge } from "@/components/HealthBadge";
 import { StatusBadge } from "@/components/StatusBadge";
 import { FirmwareTab } from "@/features/device/FirmwareTab";
@@ -100,16 +101,17 @@ export function DeviceDetailPage() {
             {device.last_refresh ? new Date(device.last_refresh).toLocaleString() : "Never"}
           </p>
         </div>
-        {isAdmin && (
-          <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <ExportMenu scope="device" targetId={deviceId} />
+          {isAdmin && (
             <Button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
               <RefreshCw
                 className={refresh.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"}
               />
               {refresh.isPending ? "Refreshing…" : "Refresh"}
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       {(isError || refresh.isError) && (

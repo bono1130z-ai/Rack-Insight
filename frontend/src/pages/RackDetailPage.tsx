@@ -6,6 +6,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { ExportMenu } from "@/components/ExportMenu";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useCluster, useRackLayout } from "@/hooks/queries";
 import { api, ApiError } from "@/services/api";
@@ -107,11 +108,14 @@ export function RackDetailPage() {
             { label: layout.rack.name },
           ]}
         />
-        {isAdmin && (
-          <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3">
+          {isAdmin && (
             <span className="text-xs text-gray-400">
               Tip: drag a device onto an empty U to move it
             </span>
+          )}
+          <ExportMenu scope="rack" targetId={rackId} />
+          {isAdmin && (
             <Button
               variant="outline"
               size="sm"
@@ -119,8 +123,8 @@ export function RackDetailPage() {
             >
               <Pencil className="h-4 w-4" /> Edit Layout
             </Button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
       <motion.div

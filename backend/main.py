@@ -11,6 +11,7 @@ from api.routes import clusters as cluster_routes
 from api.routes import collector as collector_routes
 from api.routes import credentials as credential_routes
 from api.routes import devices as device_routes
+from api.routes import export as export_routes
 from api.routes import racks as rack_routes
 from api.routes import users as user_routes
 from auth.security import hash_password
@@ -79,6 +80,7 @@ app.include_router(rack_routes.router, prefix=settings.api_prefix)
 app.include_router(device_routes.router, prefix=settings.api_prefix)
 app.include_router(credential_routes.router, prefix=settings.api_prefix)
 app.include_router(collector_routes.router, prefix=settings.api_prefix)
+app.include_router(export_routes.router, prefix=settings.api_prefix)
 
 
 @app.get("/api/health", tags=["system"])
