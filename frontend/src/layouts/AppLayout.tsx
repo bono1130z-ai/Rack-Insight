@@ -5,6 +5,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  ScrollText,
   Search,
   Server,
   Settings,
@@ -22,6 +23,7 @@ const ADMIN_MENU = [
   { to: "/admin/users", label: "User Management", Icon: UserCog },
   { to: "/admin/credentials", label: "Credential Management", Icon: KeyRound },
   { to: "/admin/collectors", label: "Collector Management", Icon: Activity },
+  { to: "/admin/audit", label: "Audit Log", Icon: ScrollText },
 ];
 
 function SidebarLink({

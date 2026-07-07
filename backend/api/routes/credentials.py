@@ -7,8 +7,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import require_admin
 from database import get_db
-from models import Credential
+from models import Credential, User
 from schemas.credential import CredentialCreate, CredentialResponse, CredentialUpdate
+from services.audit_service import (
+    ACTION_CREATE,
+    ACTION_DELETE,
+    ACTION_UPDATE,
+    record_audit,
+    snapshot_entity,
+)
 from utils.crypto import encrypt_secret
 from utils.logging import get_logger
 
@@ -42,7 +49,9 @@ async def list_credentials(db: AsyncSession = Depends(get_db)) -> list[Credentia
 
 @router.post("", response_model=CredentialResponse, status_code=status.HTTP_201_CREATED)
 async def create_credential(
-    payload: CredentialCreate, db: AsyncSession = Depends(get_db)
+    payload: CredentialCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
 ) -> CredentialResponse:
     try:
         existing = await db.execute(select(Credential).where(Credential.name == payload.name))
@@ -58,6 +67,11 @@ async def create_credential(
             description=payload.description,
         )
         db.add(credential)
+        await db.flush()
+        record_audit(
+            db, admin, ACTION_CREATE, "credential", credential.name, credential.id,
+            new_value=snapshot_entity(credential),
+        )
         await db.commit()
         await db.refresh(credential)
         logger.info("Credential %s created", credential.name)
@@ -74,9 +88,13 @@ async def create_credential(
 
 @router.patch("/{credential_id}", response_model=CredentialResponse)
 async def update_credential(
-    credential_id: uuid.UUID, payload: CredentialUpdate, db: AsyncSession = Depends(get_db)
+    credential_id: uuid.UUID,
+    payload: CredentialUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
 ) -> CredentialResponse:
     credential = await _get_credential(db, credential_id)
+    old = snapshot_entity(credential)
     data = payload.model_dump(exclude_unset=True)
     if "password" in data:
         password = data.pop("password")
@@ -84,6 +102,10 @@ async def update_credential(
             credential.password_encrypted = encrypt_secret(password)
     for key, value in data.items():
         setattr(credential, key, value)
+    record_audit(
+        db, admin, ACTION_UPDATE, "credential", credential.name, credential.id,
+        old_value=old, new_value=snapshot_entity(credential),
+    )
     await db.commit()
     await db.refresh(credential)
     return _to_response(credential)
@@ -91,8 +113,14 @@ async def update_credential(
 
 @router.delete("/{credential_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_credential(
-    credential_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    credential_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
 ) -> None:
     credential = await _get_credential(db, credential_id)
+    record_audit(
+        db, admin, ACTION_DELETE, "credential", credential.name, credential.id,
+        old_value=snapshot_entity(credential),
+    )
     await db.delete(credential)
     await db.commit()

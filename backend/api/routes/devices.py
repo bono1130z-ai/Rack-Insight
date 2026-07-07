@@ -18,6 +18,7 @@ from models import (
     Sensor,
     Snapshot,
     Storage,
+    User,
 )
 from schemas.device import (
     VALID_COLLECTOR_TYPES,
@@ -30,6 +31,13 @@ from schemas.device import (
     DeviceUpdate,
 )
 from schemas.inventory import DeviceInventoryResponse
+from services.audit_service import (
+    ACTION_CREATE,
+    ACTION_DELETE,
+    ACTION_UPDATE,
+    record_audit,
+    snapshot_entity,
+)
 from services.health_service import compute_health
 from services.inventory_service import get_device_inventory, get_latest_snapshot
 from services.refresh_service import refresh_device
@@ -70,11 +78,18 @@ async def _get_device(db: AsyncSession, device_id: uuid.UUID) -> Device:
 
 @router.get("", response_model=list[DeviceResponse])
 async def list_devices(
-    rack_id: uuid.UUID | None = None, db: AsyncSession = Depends(get_db)
+    rack_id: uuid.UUID | None = None,
+    page: int | None = None,
+    page_size: int | None = None,
+    db: AsyncSession = Depends(get_db),
 ) -> list[Device]:
+    """All devices (optionally per rack); pass page/page_size to paginate.
+    /devices/search offers filtered pagination with totals."""
     query = select(Device).order_by(Device.hostname)
     if rack_id is not None:
         query = query.where(Device.rack_id == rack_id)
+    if page is not None and page_size is not None:
+        query = query.offset((page - 1) * page_size).limit(page_size)
     result = await db.execute(query)
     return list(result.scalars().all())
 
@@ -254,9 +269,12 @@ async def refresh(
     "",
     response_model=DeviceResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
 )
-async def create_device(payload: DeviceCreate, db: AsyncSession = Depends(get_db)) -> Device:
+async def create_device(
+    payload: DeviceCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> Device:
     try:
         data = payload.model_dump(exclude={"u_position", "height"})
         for plain_field, encrypted_field in _SECRET_FIELDS.items():
@@ -275,6 +293,10 @@ async def create_device(payload: DeviceCreate, db: AsyncSession = Depends(get_db
                     device_id=device.id,
                 )
             )
+        record_audit(
+            db, admin, ACTION_CREATE, "device", device.hostname, device.id,
+            new_value=snapshot_entity(device),
+        )
         await db.commit()
         await db.refresh(device)
         logger.info("Device %s registered", device.hostname)
@@ -289,13 +311,15 @@ async def create_device(payload: DeviceCreate, db: AsyncSession = Depends(get_db
         ) from exc
 
 
-@router.patch(
-    "/{device_id}", response_model=DeviceResponse, dependencies=[Depends(require_admin)]
-)
+@router.patch("/{device_id}", response_model=DeviceResponse)
 async def update_device(
-    device_id: uuid.UUID, payload: DeviceUpdate, db: AsyncSession = Depends(get_db)
+    device_id: uuid.UUID,
+    payload: DeviceUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
 ) -> Device:
     device = await _get_device(db, device_id)
+    old = snapshot_entity(device)
     data = payload.model_dump(exclude_unset=True)
     for plain_field, encrypted_field in _SECRET_FIELDS.items():
         if plain_field in data:
@@ -304,6 +328,10 @@ async def update_device(
         data["collector_types"] = _serialize_collector_types(data["collector_types"])
     for key, value in data.items():
         setattr(device, key, value)
+    record_audit(
+        db, admin, ACTION_UPDATE, "device", device.hostname, device.id,
+        old_value=old, new_value=snapshot_entity(device),
+    )
     await db.commit()
     await db.refresh(device)
     return device
@@ -378,13 +406,17 @@ async def move_device(
         ) from exc
 
 
-@router.delete(
-    "/{device_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_admin)],
-)
-async def delete_device(device_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> None:
+@router.delete("/{device_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_device(
+    device_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> None:
     device = await _get_device(db, device_id)
     await cache_delete(device_inventory_key(str(device_id)))
+    record_audit(
+        db, admin, ACTION_DELETE, "device", device.hostname, device.id,
+        old_value=snapshot_entity(device),
+    )
     await db.delete(device)
     await db.commit()

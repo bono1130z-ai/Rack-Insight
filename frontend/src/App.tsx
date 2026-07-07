@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { AppLayout } from "@/layouts/AppLayout";
+import { AuditLogPage } from "@/pages/admin/AuditLogPage";
 import { ClusterManagementPage } from "@/pages/admin/ClusterManagementPage";
 import { CollectorManagementPage } from "@/pages/admin/CollectorManagementPage";
 import { CredentialManagementPage } from "@/pages/admin/CredentialManagementPage";
@@ -93,6 +94,14 @@ export default function App() {
               element={
                 <AdminRoute>
                   <CollectorManagementPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/audit"
+              element={
+                <AdminRoute>
+                  <AuditLogPage />
                 </AdminRoute>
               }
             />

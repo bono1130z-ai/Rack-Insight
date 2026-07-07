@@ -1,5 +1,6 @@
 import { useAuthStore } from "@/stores/auth";
 import type {
+  AuditLogPage,
   ClusterSummary,
   CollectorDeviceStatus,
   DashboardSummary,
@@ -85,6 +86,14 @@ export const api = {
   me: () => request<Me>("/auth/me"),
 
   dashboardSummary: () => request<DashboardSummary>("/dashboard/summary"),
+
+  auditLogs: (params: Record<string, string | number | undefined>) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== "") query.set(key, String(value));
+    }
+    return request<AuditLogPage>(`/audit?${query.toString()}`);
+  },
 
   clusters: () => request<ClusterSummary[]>("/clusters"),
   createCluster: (payload: Record<string, unknown>) =>

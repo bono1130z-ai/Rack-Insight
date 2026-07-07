@@ -1,3 +1,4 @@
+from models.audit import AuditLog
 from models.base import TimestampedModel
 from models.cluster import Cluster
 from models.collector_run import CollectorRun
@@ -20,6 +21,7 @@ from models.snapshot import Snapshot
 from models.user import User, UserRole
 
 __all__ = [
+    "AuditLog",
     "TimestampedModel",
     "Cluster",
     "CollectorRun",

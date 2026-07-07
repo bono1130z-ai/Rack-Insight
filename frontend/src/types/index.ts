@@ -112,6 +112,25 @@ export interface DeviceSearchPage {
   page_size: number;
 }
 
+export interface AuditLogEntry {
+  id: string;
+  username: string;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  entity_name: string | null;
+  old_value: string | null;
+  new_value: string | null;
+  created_at: string;
+}
+
+export interface AuditLogPage {
+  items: AuditLogEntry[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
 export interface DashboardSummary {
   total_devices: number;
   online: number;

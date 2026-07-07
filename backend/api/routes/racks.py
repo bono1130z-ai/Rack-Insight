@@ -9,7 +9,7 @@ from sqlalchemy.orm import selectinload
 
 from auth.dependencies import get_current_user, require_admin
 from database import get_db
-from models import Rack, RackUnit
+from models import Rack, RackUnit, User
 from schemas.rack import (
     RackBulkCreate,
     RackBulkCreateResult,
@@ -19,6 +19,13 @@ from schemas.rack import (
     RackResponse,
     RackUnitResponse,
     RackUpdate,
+)
+from services.audit_service import (
+    ACTION_CREATE,
+    ACTION_DELETE,
+    ACTION_UPDATE,
+    record_audit,
+    snapshot_entity,
 )
 from utils.logging import get_logger
 
@@ -109,12 +116,20 @@ async def update_rack_layout(
     "",
     response_model=RackResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
 )
-async def create_rack(payload: RackCreate, db: AsyncSession = Depends(get_db)) -> Rack:
+async def create_rack(
+    payload: RackCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> Rack:
     try:
         rack = Rack(**payload.model_dump())
         db.add(rack)
+        await db.flush()
+        record_audit(
+            db, admin, ACTION_CREATE, "rack", rack.name, rack.id,
+            new_value=snapshot_entity(rack),
+        )
         await db.commit()
         await db.refresh(rack)
         return rack
@@ -132,7 +147,9 @@ async def create_rack(payload: RackCreate, db: AsyncSession = Depends(get_db)) -
     dependencies=[Depends(require_admin)],
 )
 async def bulk_create_racks(
-    payload: RackBulkCreate, db: AsyncSession = Depends(get_db)
+    payload: RackBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
 ) -> RackBulkCreateResult:
     """Create prefix-N racks in one call; existing names are skipped (F7)."""
     try:
@@ -164,6 +181,12 @@ async def bulk_create_racks(
             )
             db.add(rack)
             created.append(rack)
+        await db.flush()
+        for rack in created:
+            record_audit(
+                db, admin, ACTION_CREATE, "rack", rack.name, rack.id,
+                new_value=snapshot_entity(rack),
+            )
         await db.commit()
         for rack in created:
             await db.refresh(rack)
@@ -184,22 +207,36 @@ async def bulk_create_racks(
         ) from exc
 
 
-@router.patch("/{rack_id}", response_model=RackResponse, dependencies=[Depends(require_admin)])
+@router.patch("/{rack_id}", response_model=RackResponse)
 async def update_rack(
-    rack_id: uuid.UUID, payload: RackUpdate, db: AsyncSession = Depends(get_db)
+    rack_id: uuid.UUID,
+    payload: RackUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
 ) -> Rack:
     rack = await _get_rack(db, rack_id)
+    old = snapshot_entity(rack)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(rack, key, value)
+    record_audit(
+        db, admin, ACTION_UPDATE, "rack", rack.name, rack.id,
+        old_value=old, new_value=snapshot_entity(rack),
+    )
     await db.commit()
     await db.refresh(rack)
     return rack
 
 
-@router.delete(
-    "/{rack_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_admin)]
-)
-async def delete_rack(rack_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> None:
+@router.delete("/{rack_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_rack(
+    rack_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> None:
     rack = await _get_rack(db, rack_id)
+    record_audit(
+        db, admin, ACTION_DELETE, "rack", rack.name, rack.id,
+        old_value=snapshot_entity(rack),
+    )
     await db.delete(rack)
     await db.commit()

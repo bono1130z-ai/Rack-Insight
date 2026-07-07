@@ -2,7 +2,7 @@
 "Collect Now" reuses POST /devices/{id}/refresh."""
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -109,12 +109,18 @@ async def collector_status(db: AsyncSession = Depends(get_db)) -> list[Collector
 
 @router.get("/devices/{device_id}/logs", response_model=list[CollectorRunResponse])
 async def collector_logs(
-    device_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+    device_id: uuid.UUID,
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=RECENT_LOGS_LIMIT, ge=1, le=200),
+    db: AsyncSession = Depends(get_db),
 ) -> list[CollectorRun]:
+    """Recent runs, newest first. Server-side pagination via page/page_size
+    (defaults preserve the original behavior)."""
     result = await db.execute(
         select(CollectorRun)
         .where(CollectorRun.device_id == device_id)
         .order_by(CollectorRun.created_at.desc())
-        .limit(RECENT_LOGS_LIMIT)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     )
     return list(result.scalars().all())

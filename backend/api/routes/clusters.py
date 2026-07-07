@@ -7,9 +7,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import get_current_user, require_admin
 from database import get_db
-from models import Cluster
+from models import Cluster, User
 from schemas.cluster import ClusterCreate, ClusterResponse, ClusterSummary, ClusterUpdate
 from schemas.rack import RackSummary
+from services.audit_service import (
+    ACTION_CREATE,
+    ACTION_DELETE,
+    ACTION_UPDATE,
+    record_audit,
+    snapshot_entity,
+)
 from services.summary_service import cluster_summaries, rack_summaries
 from utils.logging import get_logger
 
@@ -48,9 +55,12 @@ async def list_cluster_racks(
     "",
     response_model=ClusterResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
 )
-async def create_cluster(payload: ClusterCreate, db: AsyncSession = Depends(get_db)) -> Cluster:
+async def create_cluster(
+    payload: ClusterCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> Cluster:
     try:
         existing = await db.execute(select(Cluster).where(Cluster.name == payload.name))
         if existing.scalar_one_or_none() is not None:
@@ -59,6 +69,11 @@ async def create_cluster(payload: ClusterCreate, db: AsyncSession = Depends(get_
             )
         cluster = Cluster(**payload.model_dump())
         db.add(cluster)
+        await db.flush()
+        record_audit(
+            db, admin, ACTION_CREATE, "cluster", cluster.name, cluster.id,
+            new_value=snapshot_entity(cluster),
+        )
         await db.commit()
         await db.refresh(cluster)
         return cluster
@@ -71,18 +86,24 @@ async def create_cluster(payload: ClusterCreate, db: AsyncSession = Depends(get_
         ) from exc
 
 
-@router.patch(
-    "/{cluster_id}", response_model=ClusterResponse, dependencies=[Depends(require_admin)]
-)
+@router.patch("/{cluster_id}", response_model=ClusterResponse)
 async def update_cluster(
-    cluster_id: uuid.UUID, payload: ClusterUpdate, db: AsyncSession = Depends(get_db)
+    cluster_id: uuid.UUID,
+    payload: ClusterUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
 ) -> Cluster:
     result = await db.execute(select(Cluster).where(Cluster.id == cluster_id))
     cluster = result.scalar_one_or_none()
     if cluster is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    old = snapshot_entity(cluster)
     for key, value in payload.model_dump(exclude_unset=True).items():
         setattr(cluster, key, value)
+    record_audit(
+        db, admin, ACTION_UPDATE, "cluster", cluster.name, cluster.id,
+        old_value=old, new_value=snapshot_entity(cluster),
+    )
     await db.commit()
     await db.refresh(cluster)
     return cluster
@@ -91,12 +112,19 @@ async def update_cluster(
 @router.delete(
     "/{cluster_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_admin)],
 )
-async def delete_cluster(cluster_id: uuid.UUID, db: AsyncSession = Depends(get_db)) -> None:
+async def delete_cluster(
+    cluster_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> None:
     result = await db.execute(select(Cluster).where(Cluster.id == cluster_id))
     cluster = result.scalar_one_or_none()
     if cluster is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cluster not found")
+    record_audit(
+        db, admin, ACTION_DELETE, "cluster", cluster.name, cluster.id,
+        old_value=snapshot_entity(cluster),
+    )
     await db.delete(cluster)
     await db.commit()
