@@ -65,6 +65,29 @@ Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack 
   run collectors; `USER` has read-only access to all inventory views and sees
   no administration menus.
 
+### What's new in 1.1.0
+
+- **Inventory export** — JSON / CSV (zip) / multi-sheet Excel for a device,
+  rack, cluster or the entire inventory (`GET /api/export`).
+- **Collector failure diagnosis** — categorized error codes
+  (AUTH_FAILED, CONNECTION_TIMEOUT, DNS_FAILURE, SSL_ERROR, …) with
+  readable messages in the Collector Management UI.
+- **Unified status language** — one StatusPill component for
+  Healthy/Warning/Critical/Offline/Unknown across every page.
+- **Dashboard summary cards** — Total / Online / Warning / Critical /
+  Offline device counts (`GET /api/dashboard/summary`).
+- **Inventory search** — `GET /api/devices/search` by hostname, serial,
+  vendor, model, cluster, rack and status with server-side pagination,
+  plus a dedicated Search page.
+- **Sensor thresholds** — Redfish upper/lower thresholds displayed per
+  sensor when available.
+- **Bulk rack creation** — `POST /api/racks/bulk` (prefix + count,
+  duplicates skipped gracefully).
+- **Audit log** — all admin create/update/delete actions recorded with
+  old/new values (`GET /api/audit`, Audit Log admin page).
+
+See `docs/RELEASE_NOTES.md` for details and upgrade notes.
+
 ### Admin Console
 
 Administrators get an **Administration** section in the left sidebar and can

@@ -32,7 +32,7 @@ services:
     restart: unless-stopped
 
   backend:
-    image: ${IMAGE_PREFIX:-rack-insight}-backend:${IMAGE_TAG:-0.1.0}
+    image: ${IMAGE_PREFIX:-rack-insight}-backend:${IMAGE_TAG:-1.1.0}
     # Applies Alembic migrations automatically on startup (upgrade head),
     # so the schema is always in sync with the running code version.
     healthcheck:
@@ -61,7 +61,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ${IMAGE_PREFIX:-rack-insight}-frontend:${IMAGE_TAG:-0.1.0}
+    image: ${IMAGE_PREFIX:-rack-insight}-frontend:${IMAGE_TAG:-1.1.0}
     depends_on:
       backend:
         condition: service_healthy
