@@ -115,6 +115,8 @@ class SensorResponse(_FromORM):
     value: str | None
     unit: str | None
     status: str | None
+    upper_threshold: str | None = None
+    lower_threshold: str | None = None
 
 
 class SwitchInventoryResponse(_FromORM):

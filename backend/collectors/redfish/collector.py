@@ -15,6 +15,14 @@ logger = get_logger(__name__)
 REDFISH_ROOT: str = "/redfish/v1"
 
 
+def _threshold(reading: dict, critical_key: str, non_critical_key: str) -> str | None:
+    """Prefer the critical threshold, fall back to non-critical."""
+    value = reading.get(critical_key)
+    if value is None:
+        value = reading.get(non_critical_key)
+    return str(value) if value is not None else None
+
+
 class RedfishCollector(BaseCollector):
     name = "redfish"
     collector_type = "REDFISH"
@@ -251,6 +259,12 @@ class RedfishCollector(BaseCollector):
                     "value": str(temp.get("ReadingCelsius")),
                     "unit": "°C",
                     "status": (temp.get("Status") or {}).get("Health"),
+                    "upper_threshold": _threshold(
+                        temp, "UpperThresholdCritical", "UpperThresholdNonCritical"
+                    ),
+                    "lower_threshold": _threshold(
+                        temp, "LowerThresholdCritical", "LowerThresholdNonCritical"
+                    ),
                 }
             )
         for fan in thermal.get("Fans") or []:
@@ -263,6 +277,12 @@ class RedfishCollector(BaseCollector):
                     "value": str(fan.get("Reading")),
                     "unit": fan.get("ReadingUnits") or "RPM",
                     "status": (fan.get("Status") or {}).get("Health"),
+                    "upper_threshold": _threshold(
+                        fan, "UpperThresholdCritical", "UpperThresholdNonCritical"
+                    ),
+                    "lower_threshold": _threshold(
+                        fan, "LowerThresholdCritical", "LowerThresholdNonCritical"
+                    ),
                 }
             )
 

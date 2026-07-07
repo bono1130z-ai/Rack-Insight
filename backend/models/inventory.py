@@ -142,6 +142,9 @@ class Sensor(TimestampedModel, SnapshotChildMixin):
     value: Mapped[str | None] = mapped_column(String(64), nullable=True)
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
     status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Redfish thresholds when the endpoint provides them (F6).
+    upper_threshold: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lower_threshold: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
 
 class SwitchInventory(TimestampedModel, SnapshotChildMixin):

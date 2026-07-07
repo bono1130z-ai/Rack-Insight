@@ -52,7 +52,10 @@ SECTION_COLUMNS: dict[str, list[str]] = {
         "gateway", "bond", "vlan",
     ],
     "VM": ["device", "name", "state", "vcpu", "memory", "os", "kernel", "ip"],
-    "Sensor": ["device", "type", "name", "value", "unit", "status"],
+    "Sensor": [
+        "device", "type", "name", "value", "unit", "status",
+        "upper_threshold", "lower_threshold",
+    ],
 }
 
 Row = dict[str, Any]

@@ -283,6 +283,8 @@ export interface Sensor {
   value: string | null;
   unit: string | null;
   status: string | null;
+  upper_threshold: string | null;
+  lower_threshold: string | null;
 }
 
 export interface SwitchInventory {

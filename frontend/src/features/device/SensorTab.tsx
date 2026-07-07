@@ -14,6 +14,7 @@ export function SensorTab({ sensors }: { sensors: Sensor[] }) {
           <TH>Type</TH>
           <TH>Name</TH>
           <TH>Value</TH>
+          <TH>Thresholds</TH>
           <TH>Status</TH>
         </TR>
       </THead>
@@ -24,6 +25,18 @@ export function SensorTab({ sensors }: { sensors: Sensor[] }) {
             <TD>{sensor.name ?? "-"}</TD>
             <TD>
               {sensor.value ?? "-"} {sensor.unit ?? ""}
+            </TD>
+            <TD className="text-xs text-gray-500">
+              {sensor.upper_threshold || sensor.lower_threshold ? (
+                <>
+                  {sensor.lower_threshold != null && `min ${sensor.lower_threshold}`}
+                  {sensor.lower_threshold != null && sensor.upper_threshold != null && " / "}
+                  {sensor.upper_threshold != null && `max ${sensor.upper_threshold}`}
+                  {sensor.unit ? ` ${sensor.unit}` : ""}
+                </>
+              ) : (
+                <span className="text-gray-400">Threshold unavailable</span>
+              )}
             </TD>
             <TD>
               <StatusPill
