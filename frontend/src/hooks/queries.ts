@@ -5,6 +5,14 @@ export function useClusters() {
   return useQuery({ queryKey: ["clusters"], queryFn: api.clusters });
 }
 
+export function useDashboardSummary() {
+  return useQuery({
+    queryKey: ["dashboard", "summary"],
+    queryFn: api.dashboardSummary,
+    refetchInterval: 60_000,
+  });
+}
+
 export function useCluster(clusterId: string) {
   return useQuery({
     queryKey: ["cluster", clusterId],

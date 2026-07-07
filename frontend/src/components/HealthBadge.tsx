@@ -1,4 +1,4 @@
-import { Activity } from "lucide-react";
+import { StatusPill, normalizeStatus } from "@/components/StatusPill";
 import { Badge } from "@/components/ui/badge";
 
 export function HealthBadge({
@@ -11,12 +11,5 @@ export function HealthBadge({
   if (score === null || label === null) {
     return <Badge variant="muted">No health data</Badge>;
   }
-  const variant =
-    label === "Healthy" ? "success" : label === "Warning" ? "warning" : "critical";
-  return (
-    <Badge variant={variant}>
-      <Activity className="h-3 w-3" />
-      {score} · {label}
-    </Badge>
-  );
+  return <StatusPill status={normalizeStatus(label)} text={`${score} · ${label}`} />;
 }

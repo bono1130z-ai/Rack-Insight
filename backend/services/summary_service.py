@@ -1,12 +1,19 @@
-"""Dashboard summaries: cluster cards and rack cards."""
+"""Dashboard summaries: cluster cards, rack cards and global device counts."""
 import uuid
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import Cluster, Device, DeviceStatus, DeviceType, Rack, Snapshot
+from cache.redis_cache import cache_get, cache_set
+from models import Cluster, Device, DeviceStatus, DeviceType, Firmware, Rack, Sensor, Snapshot, Storage
 from schemas.cluster import ClusterSummary
+from schemas.dashboard import DashboardSummary
 from schemas.rack import RackSummary
+from services.health_service import compute_health
+from services.inventory_service import get_latest_snapshot
+
+DASHBOARD_SUMMARY_CACHE_KEY = "rackinsight:dashboard:summary"
+DASHBOARD_SUMMARY_TTL_SECONDS = 60
 
 
 async def cluster_summaries(db: AsyncSession) -> list[ClusterSummary]:
@@ -65,3 +72,54 @@ async def rack_summaries(db: AsyncSession, cluster_id: uuid.UUID) -> list[RackSu
         summary.warning_count = sum(1 for d in devices if d.status == DeviceStatus.WARNING)
         summaries.append(summary)
     return summaries
+
+
+async def dashboard_summary(db: AsyncSession) -> DashboardSummary:
+    """Global device counts by status plus health-critical devices.
+
+    "Critical" means the latest snapshot's health score falls in the
+    Critical band; cached briefly since it walks per-device health data.
+    """
+    cached = await cache_get(DASHBOARD_SUMMARY_CACHE_KEY)
+    if cached is not None:
+        return DashboardSummary.model_validate(cached)
+
+    devices = (await db.execute(select(Device))).scalars().all()
+    summary = DashboardSummary(
+        total_devices=len(devices),
+        online=sum(1 for d in devices if d.status == DeviceStatus.ONLINE),
+        warning=sum(1 for d in devices if d.status == DeviceStatus.WARNING),
+        offline=sum(1 for d in devices if d.status == DeviceStatus.OFFLINE),
+        unknown=sum(1 for d in devices if d.status == DeviceStatus.UNKNOWN),
+    )
+
+    critical = 0
+    for device in devices:
+        snapshot = await get_latest_snapshot(db, device.id)
+        if snapshot is None:
+            continue
+        sensors = (
+            (await db.execute(select(Sensor).where(Sensor.snapshot_id == snapshot.id)))
+            .scalars().all()
+        )
+        storages = (
+            (await db.execute(select(Storage).where(Storage.snapshot_id == snapshot.id)))
+            .scalars().all()
+        )
+        firmwares = (
+            (await db.execute(select(Firmware).where(Firmware.snapshot_id == snapshot.id)))
+            .scalars().all()
+        )
+        health = compute_health(
+            device.status, snapshot, list(sensors), list(storages), list(firmwares)
+        )
+        if health.label == "Critical":
+            critical += 1
+    summary.critical = critical
+
+    await cache_set(
+        DASHBOARD_SUMMARY_CACHE_KEY,
+        summary.model_dump(),
+        ttl_seconds=DASHBOARD_SUMMARY_TTL_SECONDS,
+    )
+    return summary

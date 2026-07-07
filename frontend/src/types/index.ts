@@ -99,6 +99,15 @@ export interface CollectorRun {
   created_at: string;
 }
 
+export interface DashboardSummary {
+  total_devices: number;
+  online: number;
+  warning: number;
+  critical: number;
+  offline: number;
+  unknown: number;
+}
+
 export interface CollectorDeviceStatus {
   device_id: string;
   hostname: string;

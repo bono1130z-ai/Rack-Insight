@@ -2,6 +2,7 @@ import { useAuthStore } from "@/stores/auth";
 import type {
   ClusterSummary,
   CollectorDeviceStatus,
+  DashboardSummary,
   CollectorRun,
   Credential,
   Device,
@@ -81,6 +82,8 @@ export const api = {
       body: JSON.stringify({ username, password }),
     }),
   me: () => request<Me>("/auth/me"),
+
+  dashboardSummary: () => request<DashboardSummary>("/dashboard/summary"),
 
   clusters: () => request<ClusterSummary[]>("/clusters"),
   createCluster: (payload: Record<string, unknown>) =>

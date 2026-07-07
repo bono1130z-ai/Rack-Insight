@@ -1,8 +1,6 @@
-import { Badge } from "@/components/ui/badge";
+import { StatusPill, normalizeStatus } from "@/components/StatusPill";
 import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
 import type { Sensor } from "@/types";
-
-const OK_VALUES = new Set(["ok", "healthy", "good", "normal", "enabled", ""]);
 
 export function SensorTab({ sensors }: { sensors: Sensor[] }) {
   if (sensors.length === 0) {
@@ -20,23 +18,21 @@ export function SensorTab({ sensors }: { sensors: Sensor[] }) {
         </TR>
       </THead>
       <TBody>
-        {sensors.map((sensor) => {
-          const ok = OK_VALUES.has((sensor.status ?? "").toLowerCase());
-          return (
-            <TR key={sensor.id}>
-              <TD>{sensor.type ?? "-"}</TD>
-              <TD>{sensor.name ?? "-"}</TD>
-              <TD>
-                {sensor.value ?? "-"} {sensor.unit ?? ""}
-              </TD>
-              <TD>
-                <Badge variant={ok ? "success" : "warning"}>
-                  {sensor.status ?? "Unknown"}
-                </Badge>
-              </TD>
-            </TR>
-          );
-        })}
+        {sensors.map((sensor) => (
+          <TR key={sensor.id}>
+            <TD>{sensor.type ?? "-"}</TD>
+            <TD>{sensor.name ?? "-"}</TD>
+            <TD>
+              {sensor.value ?? "-"} {sensor.unit ?? ""}
+            </TD>
+            <TD>
+              <StatusPill
+                status={normalizeStatus(sensor.status)}
+                text={sensor.status ?? "Unknown"}
+              />
+            </TD>
+          </TR>
+        ))}
       </TBody>
     </Table>
   );
