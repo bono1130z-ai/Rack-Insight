@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from collectors.base import BaseCollector, CollectorResult, DeviceCredentials
+from collectors.errors import RedfishSchemaError
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -36,7 +37,7 @@ class RedfishCollector(BaseCollector):
         ) as client:
             system = await self._first_member(client, f"{REDFISH_ROOT}/Systems")
             if system is None:
-                raise RuntimeError("No Redfish ComputerSystem found")
+                raise RedfishSchemaError("No Redfish ComputerSystem found")
             system_path = str(system["@odata.id"])
             sys_data = await self._get(client, system_path)
 

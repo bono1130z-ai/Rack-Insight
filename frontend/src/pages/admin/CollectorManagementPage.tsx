@@ -48,12 +48,22 @@ function CollectorLogRows({ deviceId }: { deviceId: string }) {
                 <Badge variant={log.success ? "success" : "critical"}>
                   {log.success ? "Success" : "Failed"}
                 </Badge>
+                {log.error_code && (
+                  <Badge variant="warning" className="ml-1 font-mono">
+                    {log.error_code}
+                  </Badge>
+                )}
               </td>
               <td className="whitespace-nowrap py-1.5 pr-3 text-gray-500">
                 {log.duration_ms} ms
               </td>
               <td className="py-1.5 pr-3 text-gray-500">{log.trigger ?? "-"}</td>
-              <td className="break-all py-1.5 text-gray-600">{log.message ?? "-"}</td>
+              <td className="break-all py-1.5 text-gray-600">
+                {log.readable_message ?? log.message ?? "-"}
+                {log.readable_message && log.message && (
+                  <span className="block text-[11px] text-gray-400">{log.message}</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -171,12 +181,17 @@ export function CollectorManagementPage() {
                   </TD>
                   <TD className="text-xs">
                     <span className="text-gray-500">{formatTime(entry.last_failure_at)}</span>
-                    {entry.last_error && (
+                    {entry.last_error_code && (
+                      <Badge variant="warning" className="ml-1 font-mono text-[10px]">
+                        {entry.last_error_code}
+                      </Badge>
+                    )}
+                    {(entry.last_error_readable ?? entry.last_error) && (
                       <p
                         className="max-w-56 truncate text-red-500"
-                        title={entry.last_error}
+                        title={entry.last_error ?? undefined}
                       >
-                        {entry.last_error}
+                        {entry.last_error_readable ?? entry.last_error}
                       </p>
                     )}
                   </TD>

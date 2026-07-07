@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
+from collectors.errors import ClassifiedError, classify_error
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -39,6 +40,8 @@ class CollectorResult:
     success: bool = False
     skipped: bool = False
     error: str | None = None
+    error_code: str | None = None
+    readable_message: str | None = None
     duration_ms: int = 0
     system: dict[str, Any] = field(default_factory=dict)
     cpus: list[dict[str, Any]] = field(default_factory=list)
@@ -84,7 +87,7 @@ class BaseCollector(ABC):
             return CollectorResult(collector_name=self.name, skipped=True)
 
         started = time.monotonic()
-        last_error: str | None = None
+        last_error: ClassifiedError | None = None
         for attempt in range(1, self.retry_count + 1):
             try:
                 logger.info(
@@ -100,15 +103,18 @@ class BaseCollector(ABC):
                 )
                 return result
             except Exception as exc:
-                last_error = str(exc)
+                last_error = classify_error(exc)
                 logger.warning(
-                    "Collector %s failed host=%s attempt=%d/%d: %s",
-                    self.name, creds.hostname, attempt, self.retry_count, exc,
+                    "Collector %s failed host=%s attempt=%d/%d code=%s: %s",
+                    self.name, creds.hostname, attempt, self.retry_count,
+                    last_error.code, exc,
                 )
 
         return CollectorResult(
             collector_name=self.name,
             success=False,
-            error=last_error,
+            error=last_error.detail if last_error else None,
+            error_code=last_error.code if last_error else None,
+            readable_message=last_error.readable_message if last_error else None,
             duration_ms=int((time.monotonic() - started) * 1000),
         )

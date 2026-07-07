@@ -91,10 +91,7 @@ def test_adopts_partial_create_all_database(
     import asyncio
     import sqlite3
 
-    from sqlalchemy import create_engine as sa_create_engine
-
     from database.migrations import run_migrations
-    from models import CollectorRun, Credential
 
     db_path = tmp_path / "partial.db"
     monkeypatch.setenv("DATABASE_URL", f"sqlite+aiosqlite:///{db_path}")
@@ -105,14 +102,22 @@ def test_adopts_partial_create_all_database(
     config.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
     command.upgrade(config, "0001")
 
-    # 2) ...plus the new tables that create_all would have added, and no
-    #    alembic bookkeeping (exactly what a legacy deployment looks like).
-    sync_engine = sa_create_engine(f"sqlite:///{db_path}")
-    Base.metadata.create_all(
-        sync_engine, tables=[Credential.__table__, CollectorRun.__table__]
-    )
-    sync_engine.dispose()
+    # 2) ...plus the new tables exactly as the pre-Alembic create_all shipped
+    #    them at the time (no later columns), and no alembic bookkeeping.
     conn = sqlite3.connect(db_path)
+    conn.execute(
+        "CREATE TABLE credentials ("
+        "id CHAR(32) PRIMARY KEY, created_at TIMESTAMP, updated_at TIMESTAMP,"
+        "name VARCHAR(128) UNIQUE NOT NULL, credential_type VARCHAR(16) NOT NULL,"
+        "username VARCHAR(128), password_encrypted VARCHAR(512), description TEXT)"
+    )
+    conn.execute(
+        "CREATE TABLE collector_runs ("
+        "id CHAR(32) PRIMARY KEY, created_at TIMESTAMP, updated_at TIMESTAMP,"
+        "device_id CHAR(32) NOT NULL REFERENCES devices(id),"
+        "success BOOLEAN NOT NULL, duration_ms INTEGER NOT NULL,"
+        "snapshot_id CHAR(32) REFERENCES snapshots(id), message TEXT, trigger TEXT)"
+    )
     conn.execute("DROP TABLE alembic_version")
     conn.execute(
         "INSERT INTO clusters (id, name, created_at, updated_at) "
@@ -131,10 +136,13 @@ def test_adopts_partial_create_all_database(
     preserved = conn.execute("SELECT name FROM clusters").fetchone()[0]
     conn.close()
 
+    from alembic.script import ScriptDirectory
+
+    head = ScriptDirectory.from_config(config).get_current_head()
     assert "site" in cluster_columns
     assert "orientation" in device_columns
     assert "redfish_credential_id" in device_columns
-    assert revision == "0002"
+    assert revision == head
     assert preserved == "Legacy"
 
     app_config.get_settings.cache_clear()

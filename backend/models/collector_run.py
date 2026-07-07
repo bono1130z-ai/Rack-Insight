@@ -2,7 +2,7 @@
 successful or not. Powers the Collector Management screen."""
 import uuid
 
-from sqlalchemy import Boolean, ForeignKey, Integer, Text, Uuid
+from sqlalchemy import Boolean, ForeignKey, Integer, String, Text, Uuid
 from sqlalchemy.orm import Mapped, mapped_column
 
 from models.base import TimestampedModel
@@ -21,3 +21,6 @@ class CollectorRun(TimestampedModel):
     )
     message: Mapped[str | None] = mapped_column(Text, nullable=True)
     trigger: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Categorized failure diagnosis (F2): stable code + operator-readable text.
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    readable_message: Mapped[str | None] = mapped_column(Text, nullable=True)

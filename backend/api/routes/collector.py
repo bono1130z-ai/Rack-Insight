@@ -95,6 +95,8 @@ async def collector_status(db: AsyncSession = Depends(get_db)) -> list[Collector
             if last_failure is not None:
                 entry.last_failure_at = last_failure.created_at
                 entry.last_error = last_failure.message
+                entry.last_error_code = last_failure.error_code
+                entry.last_error_readable = last_failure.readable_message
 
             entries.append(entry)
         return entries

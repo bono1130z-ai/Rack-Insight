@@ -15,6 +15,8 @@ class CollectorRunResponse(BaseModel):
     duration_ms: int
     message: str | None
     trigger: str | None
+    error_code: str | None = None
+    readable_message: str | None = None
     created_at: datetime
 
 
@@ -30,5 +32,7 @@ class CollectorDeviceStatus(BaseModel):
     last_success_at: datetime | None = None
     last_failure_at: datetime | None = None
     last_error: str | None = None
+    last_error_code: str | None = None
+    last_error_readable: str | None = None
     health_score: int | None = None
     health_label: str | None = None

@@ -94,6 +94,8 @@ export interface CollectorRun {
   duration_ms: number;
   message: string | null;
   trigger: string | null;
+  error_code: string | null;
+  readable_message: string | null;
   created_at: string;
 }
 
@@ -109,6 +111,8 @@ export interface CollectorDeviceStatus {
   last_success_at: string | null;
   last_failure_at: string | null;
   last_error: string | null;
+  last_error_code: string | null;
+  last_error_readable: string | null;
   health_score: number | null;
   health_label: string | null;
 }
