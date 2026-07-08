@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { HardDrive, Pencil, Plus, Trash2 } from "lucide-react";
+import { HardDrive, Layers, LogOut, Pencil, Plus, Trash2 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Breadcrumb } from "@/components/Breadcrumb";
@@ -17,6 +17,7 @@ import {
   useClusterRacks,
   useClusters,
   useCredentials,
+  useDeviceTemplates,
   useDevices,
   useRackLayout,
 } from "@/hooks/queries";
@@ -32,6 +33,7 @@ interface DeviceForm {
   hostname: string;
   display_name: string;
   device_type: DeviceType;
+  template_id: string;
   vendor: string;
   model: string;
   management_ip: string;
@@ -49,6 +51,7 @@ const EMPTY_FORM: DeviceForm = {
   hostname: "",
   display_name: "",
   device_type: "SERVER",
+  template_id: "",
   vendor: "",
   model: "",
   management_ip: "",
@@ -70,12 +73,22 @@ export function DeviceManagementPage() {
   const { data: devices, isLoading } = useDevices(rackId || undefined);
   const { data: layout } = useRackLayout(rackId);
   const { data: credentials } = useCredentials();
+  const { data: templates } = useDeviceTemplates();
   const queryClient = useQueryClient();
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<Device | null>(null);
   const [deleting, setDeleting] = useState<Device | null>(null);
+  const [unassigning, setUnassigning] = useState<Device | null>(null);
   const [form, setForm] = useState<DeviceForm>(EMPTY_FORM);
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkForm, setBulkForm] = useState({
+    template_id: "",
+    quantity: 3,
+    hostname_prefix: "",
+    start_index: 1,
+    pad_width: 2,
+  });
 
   useEffect(() => {
     if (!clusterId && clusters && clusters.length > 0) setClusterId(clusters[0].id);
@@ -117,6 +130,7 @@ export function DeviceManagementPage() {
       hostname: device.hostname,
       display_name: device.display_name ?? "",
       device_type: device.device_type,
+      template_id: device.template_id ?? "",
       vendor: device.vendor ?? "",
       model: device.model ?? "",
       management_ip: device.management_ip ?? "",
@@ -140,6 +154,7 @@ export function DeviceManagementPage() {
         hostname: form.hostname,
         display_name: form.display_name || null,
         device_type: form.device_type,
+        template_id: form.template_id || null,
         vendor: form.vendor || null,
         model: form.model || null,
         management_ip: form.management_ip || null,
@@ -187,6 +202,49 @@ export function DeviceManagementPage() {
       toast.error("Delete failed", err instanceof ApiError ? err.message : "Unexpected error"),
   });
 
+  const unassign = useMutation({
+    mutationFn: (id: string) => api.unassignDevice(id),
+    onSuccess: () => {
+      toast.success("Removed from rack", unassigning?.hostname);
+      setUnassigning(null);
+      invalidate();
+    },
+    onError: (err) =>
+      toast.error("Remove failed", err instanceof ApiError ? err.message : "Unexpected error"),
+  });
+
+  const bulkCreate = useMutation({
+    mutationFn: () =>
+      api.bulkCreateDevices({
+        rack_id: rackId,
+        template_id: bulkForm.template_id || null,
+        quantity: bulkForm.quantity,
+        hostname_prefix: bulkForm.hostname_prefix,
+        start_index: bulkForm.start_index,
+        pad_width: bulkForm.pad_width,
+      }),
+    onSuccess: (result) => {
+      const skipped =
+        result.skipped.length > 0 ? ` (skipped: ${result.skipped.join(", ")})` : "";
+      toast.success(`${result.created.length} devices created`, skipped || undefined);
+      setBulkOpen(false);
+      invalidate();
+    },
+    onError: (err) =>
+      toast.error("Bulk create failed", err instanceof ApiError ? err.message : "Unexpected error"),
+  });
+
+  // Choosing a template auto-fills vendor/model (kept editable for overrides).
+  const applyTemplate = (templateId: string) => {
+    const template = templates?.find((t) => t.id === templateId);
+    setForm((prev) => ({
+      ...prev,
+      template_id: templateId,
+      vendor: template?.vendor ?? prev.vendor,
+      model: template?.model ?? prev.model,
+    }));
+  };
+
   const toggleCollectorType = (type: string) => {
     setForm((prev) => ({
       ...prev,
@@ -227,16 +285,28 @@ export function DeviceManagementPage() {
         id: "actions",
         header: "",
         enableSorting: false,
-        cell: ({ row }) => (
-          <div className="flex justify-end gap-1">
-            <Button variant="ghost" size="icon" onClick={() => openEdit(row.original)}>
-              <Pencil className="h-4 w-4 text-gray-500" />
-            </Button>
-            <Button variant="ghost" size="icon" onClick={() => setDeleting(row.original)}>
-              <Trash2 className="h-4 w-4 text-red-500" />
-            </Button>
-          </div>
-        ),
+        cell: ({ row }) => {
+          const placed = uPositionByDevice.has(row.original.id);
+          return (
+            <div className="flex justify-end gap-1">
+              <Button variant="ghost" size="icon" onClick={() => openEdit(row.original)}>
+                <Pencil className="h-4 w-4 text-gray-500" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                disabled={!placed}
+                title={placed ? "Remove from rack slot" : "Not installed in a slot"}
+                onClick={() => setUnassigning(row.original)}
+              >
+                <LogOut className="h-4 w-4 text-orange-500" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => setDeleting(row.original)}>
+                <Trash2 className="h-4 w-4 text-red-500" />
+              </Button>
+            </div>
+          );
+        },
       },
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -248,7 +318,7 @@ export function DeviceManagementPage() {
 
   return (
     <div className="flex flex-col gap-4">
-      <Breadcrumb crumbs={[{ label: "Administration" }, { label: "Device Management" }]} />
+      <Breadcrumb crumbs={[{ label: "Administration" }, { label: "Installed Devices" }]} />
 
       <div className="flex items-end gap-3">
         <Field label="Cluster">
@@ -289,9 +359,19 @@ export function DeviceManagementPage() {
         isLoading={isLoading && Boolean(rackId)}
         searchPlaceholder="Search devices…"
         toolbar={
-          <Button onClick={openCreate} disabled={!rackId}>
-            <Plus className="h-4 w-4" /> Register Device
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              onClick={() => setBulkOpen(true)}
+              disabled={!rackId}
+              title="Install several identical servers at once"
+            >
+              <Layers className="h-4 w-4" /> Create Multiple Devices
+            </Button>
+            <Button onClick={openCreate} disabled={!rackId}>
+              <Plus className="h-4 w-4" /> Register Device
+            </Button>
+          </>
         }
         emptyState={
           <EmptyState
@@ -350,6 +430,19 @@ export function DeviceManagementPage() {
               {DEVICE_TYPES.map((type) => (
                 <option key={type} value={type}>
                   {type}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Device Template">
+            <Select
+              value={form.template_id}
+              onChange={(e) => applyTemplate(e.target.value)}
+            >
+              <option value="">(None — enter vendor/model manually)</option>
+              {templates?.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
                 </option>
               ))}
             </Select>
@@ -479,6 +572,107 @@ export function DeviceManagementPage() {
           </Field>
         </div>
       </Dialog>
+
+      <Dialog
+        open={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        title="Create Multiple Devices"
+        description="Installs several identical servers from a hostname prefix. Existing hostnames are skipped."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setBulkOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => bulkCreate.mutate()}
+              disabled={!bulkForm.hostname_prefix || bulkCreate.isPending}
+            >
+              {bulkCreate.isPending ? "Creating…" : `Create ${bulkForm.quantity} Devices`}
+            </Button>
+          </>
+        }
+      >
+        <div className="flex flex-col gap-3">
+          <Field label="Device Template">
+            <Select
+              value={bulkForm.template_id}
+              onChange={(e) => setBulkForm({ ...bulkForm, template_id: e.target.value })}
+            >
+              <option value="">(None)</option>
+              {templates?.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </Select>
+          </Field>
+          <Field label="Hostname Prefix *">
+            <Input
+              value={bulkForm.hostname_prefix}
+              autoFocus
+              placeholder="e.g. DL320"
+              onChange={(e) =>
+                setBulkForm({ ...bulkForm, hostname_prefix: e.target.value })
+              }
+            />
+          </Field>
+          <div className="grid grid-cols-3 gap-3">
+            <Field label="Quantity">
+              <Input
+                type="number"
+                min={1}
+                max={100}
+                value={bulkForm.quantity}
+                onChange={(e) =>
+                  setBulkForm({ ...bulkForm, quantity: Number(e.target.value) })
+                }
+              />
+            </Field>
+            <Field label="Start #">
+              <Input
+                type="number"
+                min={0}
+                value={bulkForm.start_index}
+                onChange={(e) =>
+                  setBulkForm({ ...bulkForm, start_index: Number(e.target.value) })
+                }
+              />
+            </Field>
+            <Field label="Pad width">
+              <Input
+                type="number"
+                min={1}
+                max={6}
+                value={bulkForm.pad_width}
+                onChange={(e) =>
+                  setBulkForm({ ...bulkForm, pad_width: Number(e.target.value) })
+                }
+              />
+            </Field>
+          </div>
+          {bulkForm.hostname_prefix && (
+            <p className="text-xs text-gray-500">
+              Will create: {bulkForm.hostname_prefix}-
+              {String(bulkForm.start_index).padStart(bulkForm.pad_width, "0")} …{" "}
+              {bulkForm.hostname_prefix}-
+              {String(bulkForm.start_index + bulkForm.quantity - 1).padStart(
+                bulkForm.pad_width,
+                "0",
+              )}
+            </p>
+          )}
+        </div>
+      </Dialog>
+
+      <ConfirmDialog
+        open={unassigning !== null}
+        title="Remove Device from Rack"
+        description={`Remove "${unassigning?.hostname}" from its rack slot? The device stays registered and can be reinstalled later.`}
+        confirmLabel="Remove"
+        pending={unassign.isPending}
+        onConfirm={() => unassigning && unassign.mutate(unassigning.id)}
+        onClose={() => setUnassigning(null)}
+      />
 
       <ConfirmDialog
         open={deleting !== null}

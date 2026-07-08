@@ -56,6 +56,28 @@ export interface RackSummary {
 export type DeviceOrientation = "FRONT" | "REAR";
 export type CredentialType = "REDFISH" | "SSH" | "SNMP";
 
+export interface DeviceTemplate {
+  id: string;
+  name: string;
+  vendor: string | null;
+  model: string | null;
+  cpu: string | null;
+  memory: string | null;
+  storage: string | null;
+  firmware: string | null;
+  nic: string | null;
+  description: string | null;
+  instance_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BulkDeviceResult {
+  created: Device[];
+  skipped: string[];
+  errors: { hostname: string; error: string }[];
+}
+
 export interface Device {
   id: string;
   rack_id: string;
@@ -75,6 +97,10 @@ export interface Device {
   redfish_credential_id: string | null;
   ssh_credential_id: string | null;
   snmp_credential_id: string | null;
+  template_id: string | null;
+  asset_tag?: string | null;
+  serial_override?: string | null;
+  description?: string | null;
 }
 
 export interface Credential {

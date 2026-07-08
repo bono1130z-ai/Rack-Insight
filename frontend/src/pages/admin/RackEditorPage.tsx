@@ -1,102 +1,128 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Plus, Save, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  KeyboardMusic,
+  LogOut,
+  Network,
+  Plug,
+  Server as ServerIcon,
+} from "lucide-react";
+import { useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { Breadcrumb } from "@/components/Breadcrumb";
+import { EmptyState } from "@/components/EmptyState";
+import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
-import { Breadcrumb } from "@/components/Breadcrumb";
-import { useRackLayout } from "@/hooks/queries";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useCluster, useDevices, useRackLayout } from "@/hooks/queries";
 import { api, ApiError } from "@/services/api";
+import { toast } from "@/stores/toast";
+import type { DeviceStatus, DeviceType, RackUnit } from "@/types";
 
-interface EditableUnit {
-  u_position: number;
+const statusColor: Record<DeviceStatus, string> = {
+  ONLINE: "bg-green-100 border-green-500 text-green-900",
+  WARNING: "bg-orange-100 border-orange-500 text-orange-900",
+  OFFLINE: "bg-red-100 border-red-500 text-red-900",
+  UNKNOWN: "bg-gray-100 border-gray-400 text-gray-700",
+};
+
+const typeIcon: Record<DeviceType, typeof ServerIcon> = {
+  SERVER: ServerIcon,
+  SWITCH: Network,
+  PDU: Plug,
+  KVM: KeyboardMusic,
+  OTHER: ServerIcon,
+};
+
+interface Slot {
+  uPosition: number;
   height: number;
-  device_id: string | null;
+  unit: RackUnit | null;
 }
 
+function buildSlots(rackHeight: number, units: RackUnit[]): Slot[] {
+  const anchors = new Map<number, RackUnit>();
+  const covered = new Set<number>();
+  for (const unit of units) {
+    anchors.set(unit.u_position, unit);
+    for (let u = unit.u_position; u < unit.u_position + unit.height; u += 1) {
+      covered.add(u);
+    }
+  }
+  const slots: Slot[] = [];
+  for (let u = rackHeight; u >= 1; u -= 1) {
+    const unit = anchors.get(u);
+    if (unit) slots.push({ uPosition: u, height: unit.height, unit });
+    else if (!covered.has(u)) slots.push({ uPosition: u, height: 1, unit: null });
+  }
+  return slots;
+}
+
+/**
+ * Drag-and-drop 42U rack editor (P4). Devices are moved directly by dragging
+ * their block onto an empty U — no automatic shifting of other devices — the
+ * same interaction as Rack View. Unplaced devices sit in a side palette and
+ * can be dragged into the rack (assign) or removed from it (unassign).
+ */
 export function RackEditorPage() {
   const { rackId = "" } = useParams();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { data: layout } = useRackLayout(rackId);
-  const { data: devices } = useQuery({
-    queryKey: ["devices", rackId],
-    queryFn: () => api.devices(rackId),
-  });
+  const { data: layout, isLoading } = useRackLayout(rackId);
+  const { data: cluster } = useCluster(layout?.rack.cluster_id ?? "");
+  const { data: devices } = useDevices(rackId || undefined);
+  const [dragOverU, setDragOverU] = useState<number | null>(null);
+  const [paletteHover, setPaletteHover] = useState(false);
 
-  const [units, setUnits] = useState<EditableUnit[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [newDevice, setNewDevice] = useState({
-    hostname: "",
-    device_type: "SERVER",
-    management_ip: "",
-    ilo_ip: "",
-    ilo_username: "",
-    ilo_password: "",
-    ssh_username: "",
-    ssh_password: "",
-  });
-
-  useEffect(() => {
-    if (layout) {
-      setUnits(
-        layout.units.map((unit) => ({
-          u_position: unit.u_position,
-          height: unit.height,
-          device_id: unit.device?.id ?? null,
-        })),
-      );
-    }
-  }, [layout]);
-
-  const save = useMutation({
-    mutationFn: () => api.updateRackLayout(rackId, units),
-    onSuccess: () => {
-      setError(null);
-      void queryClient.invalidateQueries({ queryKey: ["rack", rackId, "layout"] });
-      navigate(`/racks/${rackId}`);
-    },
-    onError: (err) =>
-      setError(err instanceof ApiError ? err.message : "Failed to save layout"),
-  });
-
-  const createDevice = useMutation({
-    mutationFn: () =>
-      api.createDevice({
-        rack_id: rackId,
-        hostname: newDevice.hostname,
-        device_type: newDevice.device_type,
-        management_ip: newDevice.management_ip || null,
-        ilo_ip: newDevice.ilo_ip || null,
-        ilo_username: newDevice.ilo_username || null,
-        ilo_password: newDevice.ilo_password || null,
-        ssh_username: newDevice.ssh_username || null,
-        ssh_password: newDevice.ssh_password || null,
-      }),
-    onSuccess: () => {
-      setNewDevice({
-        hostname: "",
-        device_type: "SERVER",
-        management_ip: "",
-        ilo_ip: "",
-        ilo_username: "",
-        ilo_password: "",
-        ssh_username: "",
-        ssh_password: "",
-      });
-      void queryClient.invalidateQueries({ queryKey: ["devices", rackId] });
-    },
-    onError: (err) =>
-      setError(err instanceof ApiError ? err.message : "Failed to register device"),
-  });
-
-  const updateUnit = (index: number, patch: Partial<EditableUnit>) => {
-    setUnits((prev) => prev.map((unit, i) => (i === index ? { ...unit, ...patch } : unit)));
+  const refresh = () => {
+    void queryClient.invalidateQueries({ queryKey: ["rack", rackId, "layout"] });
+    void queryClient.invalidateQueries({ queryKey: ["devices", rackId] });
   };
 
-  if (!layout) return null;
+  const move = useMutation({
+    mutationFn: ({ deviceId, u }: { deviceId: string; u: number }) =>
+      api.moveDevice(deviceId, { u_position: u }),
+    onSuccess: refresh,
+    onError: (err) =>
+      toast.error("Move failed", err instanceof ApiError ? err.message : "Unexpected error"),
+  });
+
+  const unassign = useMutation({
+    mutationFn: (deviceId: string) => api.unassignDevice(deviceId),
+    onSuccess: () => {
+      toast.success("Removed from rack");
+      refresh();
+    },
+    onError: (err) =>
+      toast.error("Remove failed", err instanceof ApiError ? err.message : "Unexpected error"),
+  });
+
+  const slots = useMemo(
+    () => (layout ? buildSlots(layout.rack.height, layout.units) : []),
+    [layout],
+  );
+
+  const placedIds = useMemo(
+    () => new Set((layout?.units ?? []).map((u) => u.device?.id).filter(Boolean)),
+    [layout],
+  );
+  const unplaced = (devices ?? []).filter((d) => !placedIds.has(d.id));
+
+  if (isLoading || !layout) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-6 w-96" />
+        <Skeleton className="h-[70vh] w-full max-w-2xl" />
+      </div>
+    );
+  }
+
+  const onDropAtU = (event: React.DragEvent, u: number) => {
+    event.preventDefault();
+    setDragOverU(null);
+    const deviceId = event.dataTransfer.getData("text/plain");
+    if (deviceId) move.mutate({ deviceId, u });
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -104,184 +130,127 @@ export function RackEditorPage() {
         <Breadcrumb
           crumbs={[
             { label: "Clusters", to: "/" },
-            { label: "Rack", to: `/racks/${rackId}` },
-            { label: `${layout.rack.name} — Edit` },
+            {
+              label: cluster?.name ?? "Cluster",
+              to: `/clusters/${layout.rack.cluster_id}`,
+            },
+            { label: layout.rack.name, to: `/racks/${rackId}` },
+            { label: "Edit Layout" },
           ]}
         />
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={() => navigate(`/racks/${rackId}`)}>
-            Cancel
-          </Button>
-          <Button onClick={() => save.mutate()} disabled={save.isPending}>
-            <Save className="h-4 w-4" /> Save Layout
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={() => navigate(`/racks/${rackId}`)}>
+          Done
+        </Button>
       </div>
 
-      {error && (
-        <p className="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-          {error}
-        </p>
-      )}
+      <p className="text-sm text-gray-500">
+        Drag a device onto an empty U to place or move it — other devices are
+        never shifted automatically. Drag a device to the “Unplaced” panel to
+        remove it from the rack.
+      </p>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Layout ({layout.rack.height}U)</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <THead>
-              <TR>
-                <TH className="w-28">U Position</TH>
-                <TH>Device</TH>
-                <TH className="w-28">Height (U)</TH>
-                <TH className="w-16" />
-              </TR>
-            </THead>
-            <TBody>
-              {units
-                .slice()
-                .sort((a, b) => b.u_position - a.u_position)
-                .map((unit) => {
-                  const index = units.indexOf(unit);
-                  return (
-                    <TR key={index}>
-                      <TD>
-                        <Input
-                          type="number"
-                          min={1}
-                          max={layout.rack.height}
-                          value={unit.u_position}
-                          onChange={(e) =>
-                            updateUnit(index, { u_position: Number(e.target.value) })
-                          }
-                        />
-                      </TD>
-                      <TD>
-                        <select
-                          className="h-9 w-full rounded-md border border-gray-300 bg-white px-2 text-sm"
-                          value={unit.device_id ?? ""}
-                          onChange={(e) =>
-                            updateUnit(index, { device_id: e.target.value || null })
-                          }
-                        >
-                          <option value="">(Blank)</option>
-                          {devices?.map((device) => (
-                            <option key={device.id} value={device.id}>
-                              {device.hostname} ({device.device_type})
-                            </option>
-                          ))}
-                        </select>
-                      </TD>
-                      <TD>
-                        <select
-                          className="h-9 w-full rounded-md border border-gray-300 bg-white px-2 text-sm"
-                          value={unit.height}
-                          onChange={(e) =>
-                            updateUnit(index, { height: Number(e.target.value) })
-                          }
-                        >
-                          {[1, 2, 4].map((h) => (
-                            <option key={h} value={h}>
-                              {h}U
-                            </option>
-                          ))}
-                        </select>
-                      </TD>
-                      <TD>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() =>
-                            setUnits((prev) => prev.filter((_, i) => i !== index))
-                          }
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
-                      </TD>
-                    </TR>
-                  );
-                })}
-            </TBody>
-          </Table>
-          <Button
-            variant="outline"
-            size="sm"
-            className="mt-3"
-            onClick={() =>
-              setUnits((prev) => [
-                ...prev,
-                { u_position: 1, height: 1, device_id: null },
-              ])
+      <div className="flex gap-4">
+        <div
+          className="flex w-full max-w-2xl flex-col rounded-lg border-4 border-gray-700 bg-gray-800 p-2"
+          style={{ height: "calc(100vh - 220px)" }}
+        >
+          {slots.map((slot) => {
+            const heightPercent = (slot.height / layout.rack.height) * 100;
+            if (!slot.unit?.device) {
+              return (
+                <div
+                  key={slot.uPosition}
+                  style={{ height: `${heightPercent}%` }}
+                  className={`flex items-center border-b border-gray-700 px-2 ${
+                    dragOverU === slot.uPosition ? "bg-blue-900/60" : ""
+                  }`}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    setDragOverU(slot.uPosition);
+                  }}
+                  onDragLeave={() => setDragOverU(null)}
+                  onDrop={(e) => onDropAtU(e, slot.uPosition)}
+                >
+                  <span className="w-8 text-right text-[10px] text-gray-500">
+                    {slot.uPosition}
+                  </span>
+                </div>
+              );
             }
-          >
-            <Plus className="h-4 w-4" /> Add Row
-          </Button>
-        </CardContent>
-      </Card>
+            const device = slot.unit.device;
+            const Icon = typeIcon[device.device_type] ?? ServerIcon;
+            return (
+              <div
+                key={slot.uPosition}
+                style={{ height: `${heightPercent}%` }}
+                className="flex border-b border-gray-700 px-2 py-0.5"
+              >
+                <span className="w-8 self-center text-right text-[10px] text-gray-500">
+                  {slot.uPosition}
+                </span>
+                <button
+                  type="button"
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData("text/plain", device.id)}
+                  onClick={() => navigate(`/devices/${device.id}`)}
+                  className={`ml-2 flex flex-1 cursor-grab items-center gap-2 rounded border-l-4 px-3 text-left text-sm font-medium active:cursor-grabbing ${statusColor[device.status]}`}
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="truncate">
+                    {device.display_name ?? device.hostname}
+                  </span>
+                  <span className="ml-auto hidden text-xs opacity-70 lg:inline">
+                    {device.model ?? device.device_type}
+                  </span>
+                </button>
+              </div>
+            );
+          })}
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Register New Device</CardTitle>
-        </CardHeader>
-        <CardContent className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-          <Input
-            placeholder="Hostname *"
-            value={newDevice.hostname}
-            onChange={(e) => setNewDevice({ ...newDevice, hostname: e.target.value })}
-          />
-          <select
-            className="h-9 rounded-md border border-gray-300 bg-white px-2 text-sm"
-            value={newDevice.device_type}
-            onChange={(e) => setNewDevice({ ...newDevice, device_type: e.target.value })}
-          >
-            {["SERVER", "SWITCH", "PDU", "KVM", "OTHER"].map((type) => (
-              <option key={type} value={type}>
-                {type}
-              </option>
-            ))}
-          </select>
-          <Input
-            placeholder="Management IP"
-            value={newDevice.management_ip}
-            onChange={(e) => setNewDevice({ ...newDevice, management_ip: e.target.value })}
-          />
-          <Input
-            placeholder="iLO IP"
-            value={newDevice.ilo_ip}
-            onChange={(e) => setNewDevice({ ...newDevice, ilo_ip: e.target.value })}
-          />
-          <Input
-            placeholder="iLO Username"
-            value={newDevice.ilo_username}
-            onChange={(e) => setNewDevice({ ...newDevice, ilo_username: e.target.value })}
-          />
-          <Input
-            placeholder="iLO Password"
-            type="password"
-            value={newDevice.ilo_password}
-            onChange={(e) => setNewDevice({ ...newDevice, ilo_password: e.target.value })}
-          />
-          <Input
-            placeholder="SSH Username"
-            value={newDevice.ssh_username}
-            onChange={(e) => setNewDevice({ ...newDevice, ssh_username: e.target.value })}
-          />
-          <Input
-            placeholder="SSH Password"
-            type="password"
-            value={newDevice.ssh_password}
-            onChange={(e) => setNewDevice({ ...newDevice, ssh_password: e.target.value })}
-          />
-          <Button
-            className="col-span-2 lg:col-span-4 lg:w-48"
-            disabled={!newDevice.hostname || createDevice.isPending}
-            onClick={() => createDevice.mutate()}
-          >
-            <Plus className="h-4 w-4" /> Register Device
-          </Button>
-        </CardContent>
-      </Card>
+        <Card
+          className={`w-72 shrink-0 ${paletteHover ? "ring-2 ring-orange-400" : ""}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            setPaletteHover(true);
+          }}
+          onDragLeave={() => setPaletteHover(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setPaletteHover(false);
+            const deviceId = e.dataTransfer.getData("text/plain");
+            if (deviceId && placedIds.has(deviceId)) unassign.mutate(deviceId);
+          }}
+        >
+          <CardHeader>
+            <CardTitle className="text-sm">Unplaced devices</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-2">
+            {unplaced.length === 0 ? (
+              <EmptyState
+                Icon={LogOut}
+                title="All devices placed"
+                description="Drag a device here to remove it from the rack."
+              />
+            ) : (
+              unplaced.map((device) => (
+                <div
+                  key={device.id}
+                  draggable
+                  onDragStart={(e) => e.dataTransfer.setData("text/plain", device.id)}
+                  className="flex cursor-grab items-center gap-2 rounded border border-gray-200 bg-white px-2 py-1.5 text-sm active:cursor-grabbing"
+                >
+                  <ServerIcon className="h-4 w-4 text-gray-400" />
+                  <span className="truncate">{device.hostname}</span>
+                  <span className="ml-auto">
+                    <StatusBadge status={device.status} />
+                  </span>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

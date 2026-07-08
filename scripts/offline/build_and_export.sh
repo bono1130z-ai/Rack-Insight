@@ -12,7 +12,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-IMAGE_TAG="${1:-${IMAGE_TAG:-1.1.0}}"
+IMAGE_TAG="${1:-${IMAGE_TAG:-1.1.1}}"
 IMAGE_PREFIX="${IMAGE_PREFIX:-rack-insight}"
 DIST_DIR="${REPO_ROOT}/dist"
 

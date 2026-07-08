@@ -72,6 +72,10 @@ export function useCredentials() {
   return useQuery({ queryKey: ["credentials"], queryFn: api.credentials });
 }
 
+export function useDeviceTemplates() {
+  return useQuery({ queryKey: ["device-templates"], queryFn: api.deviceTemplates });
+}
+
 export function useCollectorStatus() {
   return useQuery({
     queryKey: ["collector", "status"],

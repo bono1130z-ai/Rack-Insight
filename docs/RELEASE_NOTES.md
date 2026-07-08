@@ -1,5 +1,63 @@
 # Release Notes
 
+## 1.1.1 (2026-07-08)
+
+Patch release. Fully backward compatible: the 1.0/1.1 `/api/devices` API,
+exports, collectors, dashboard, search and audit log all keep working. The one
+additive migration (0006) preserves all existing data.
+
+### Data model — Device Template + Rack Device Instance (P5)
+
+The device model is split into two concepts:
+
+- **Device Template** — a reusable hardware model (vendor, model, CPU, memory,
+  storage, firmware, NIC). Never holds deployment data.
+- **Rack Device Instance** — an installed server: hostname, management IP,
+  iLO IP, credentials, rack, U position, status. Many instances may reference
+  one template.
+
+Implementation: the existing `devices` table (which holds deployment data) was
+renamed to `rack_device_instances`; its foreign keys
+(snapshots/rack_units/collector_runs) follow the rename with no value rewrites,
+so **existing rack layouts, snapshots and exports stay valid**. A new
+`device_templates` table holds hardware models. Migration 0006 backfills one
+**deduplicated** template per distinct (vendor, model) and links every existing
+instance to it — one template + one instance per original device, no data loss.
+
+- `GET/POST/PATCH/DELETE /api/device-templates` (read: any user; write: admin,
+  audited). Deletion is blocked while instances reference the template.
+- Creating a device accepts an optional `template_id`; vendor/model are
+  inherited from the template when not set explicitly.
+- Collectors keep writing **per-instance** snapshots; templates hold declared
+  specs and are not overwritten by collection (so shared templates never
+  thrash).
+- UI: **Device Templates** admin page (hardware models); **Installed Devices**
+  page manages instances and lets you pick a template.
+
+### Other improvements
+
+- **P1 — Rename**: "Bulk" rack creation is now **"Create Multiple Racks"**
+  (button, dialog, tooltip, docs). API `POST /api/racks/bulk` unchanged.
+- **P2 — Rack assignment workflow**: assign/remove devices without opening the
+  spreadsheet editor. `PUT /api/devices/{id}/position` can now move a device
+  into a different rack; new `DELETE /api/devices/{id}/position` uninstalls a
+  device from its slot (keeps the device). Available inline in Installed
+  Devices and via drag-and-drop in the rack editor.
+- **P3 — Create Multiple Devices**: `POST /api/devices/bulk` installs many
+  identical instances in one transaction with sequential hostname generation
+  (prefix + zero-padded number) or explicit hostnames; duplicates skipped,
+  errors reported. UI dialog in Installed Devices.
+- **P4 — Drag-and-drop rack editing**: the rack layout editor is now a 42U
+  drag-and-drop surface (same interaction as Rack View) — devices move
+  directly with no automatic shifting, and an "Unplaced" palette assigns/removes
+  devices. Replaces the number-input reordering.
+
+### Upgrade notes
+
+- `docker compose` up/pull the 1.1.1 images — migration 0006 runs automatically
+  at startup and transforms existing devices into templates + instances.
+- Default image tag is now `1.1.1`.
+
 ## 1.1.0 (2026-07-07)
 
 Fully backward compatible with 1.0.0. All schema changes ship as additive

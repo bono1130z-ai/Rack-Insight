@@ -1,6 +1,7 @@
 import { useAuthStore } from "@/stores/auth";
 import type {
   AuditLogPage,
+  BulkDeviceResult,
   ClusterSummary,
   CollectorDeviceStatus,
   DashboardSummary,
@@ -10,6 +11,7 @@ import type {
   DeviceDetail,
   DeviceInventory,
   DeviceSearchPage,
+  DeviceTemplate,
   Me,
   RackLayout,
   RackSummary,
@@ -154,6 +156,27 @@ export const api = {
     }),
   deleteDevice: (deviceId: string) =>
     request<void>(`/devices/${deviceId}`, { method: "DELETE" }),
+  bulkCreateDevices: (payload: Record<string, unknown>) =>
+    request<BulkDeviceResult>("/devices/bulk", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  unassignDevice: (deviceId: string) =>
+    request<void>(`/devices/${deviceId}/position`, { method: "DELETE" }),
+
+  deviceTemplates: () => request<DeviceTemplate[]>("/device-templates"),
+  createDeviceTemplate: (payload: Record<string, unknown>) =>
+    request<DeviceTemplate>("/device-templates", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  updateDeviceTemplate: (id: string, payload: Record<string, unknown>) =>
+    request<DeviceTemplate>(`/device-templates/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteDeviceTemplate: (id: string) =>
+    request<void>(`/device-templates/${id}`, { method: "DELETE" }),
   deviceInventory: (deviceId: string) =>
     request<DeviceInventory>(`/devices/${deviceId}/inventory`),
   refreshDevice: (deviceId: string) =>

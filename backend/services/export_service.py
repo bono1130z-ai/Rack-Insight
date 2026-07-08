@@ -25,9 +25,13 @@ EXPORT_SCOPES = ("device", "rack", "cluster", "all")
 EXPORT_FORMATS = ("json", "csv", "xlsx")
 
 SECTION_COLUMNS: dict[str, list[str]] = {
+    # Template (hardware model) fields first, then Rack Instance (deployment)
+    # fields — clearly separated per the 1.1.1 device-model split.
     "Devices": [
-        "hostname", "display_name", "device_type", "vendor", "model", "status",
-        "management_ip", "ilo_ip", "orientation", "cluster", "rack", "last_collected",
+        "template", "vendor", "model", "cpu", "memory",
+        "hostname", "display_name", "device_type", "status",
+        "management_ip", "ilo_ip", "orientation", "asset_tag",
+        "cluster", "rack", "last_collected",
     ],
     "CPU": [
         "device", "socket", "vendor", "model", "cores", "threads",
@@ -109,16 +113,23 @@ async def _resolve_devices(
 
 
 def _device_row(device: Device, inventory: DeviceInventoryResponse) -> Row:
+    template = device.template
     return {
+        # Device Template (hardware model) fields
+        "template": template.name if template else None,
+        "vendor": device.vendor or (template.vendor if template else None),
+        "model": device.model or (template.model if template else None),
+        "cpu": template.cpu if template else None,
+        "memory": template.memory if template else None,
+        # Rack Device Instance (deployment) fields
         "hostname": device.hostname,
         "display_name": device.display_name,
         "device_type": device.device_type.value,
-        "vendor": device.vendor,
-        "model": device.model,
         "status": device.status.value,
         "management_ip": device.management_ip,
         "ilo_ip": device.ilo_ip,
         "orientation": device.orientation.value,
+        "asset_tag": device.asset_tag,
         "cluster": device.rack.cluster.name if device.rack and device.rack.cluster else None,
         "rack": device.rack.name if device.rack else None,
         "last_collected": (

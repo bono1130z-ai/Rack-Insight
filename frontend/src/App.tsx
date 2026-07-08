@@ -6,6 +6,7 @@ import { ClusterManagementPage } from "@/pages/admin/ClusterManagementPage";
 import { CollectorManagementPage } from "@/pages/admin/CollectorManagementPage";
 import { CredentialManagementPage } from "@/pages/admin/CredentialManagementPage";
 import { DeviceManagementPage } from "@/pages/admin/DeviceManagementPage";
+import { DeviceTemplatesPage } from "@/pages/admin/DeviceTemplatesPage";
 import { RackEditorPage } from "@/pages/admin/RackEditorPage";
 import { RackManagementPage } from "@/pages/admin/RackManagementPage";
 import { UserManagementPage } from "@/pages/admin/UserManagementPage";
@@ -62,6 +63,14 @@ export default function App() {
               element={
                 <AdminRoute>
                   <RackManagementPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/device-templates"
+              element={
+                <AdminRoute>
+                  <DeviceTemplatesPage />
                 </AdminRoute>
               }
             />

@@ -1,6 +1,7 @@
 import {
   Activity,
   Boxes,
+  Cpu,
   HardDrive,
   KeyRound,
   LayoutDashboard,
@@ -19,7 +20,8 @@ import { useAuthStore } from "@/stores/auth";
 const ADMIN_MENU = [
   { to: "/admin/clusters", label: "Cluster Management", Icon: Boxes },
   { to: "/admin/racks", label: "Rack Management", Icon: Server },
-  { to: "/admin/devices", label: "Device Management", Icon: HardDrive },
+  { to: "/admin/device-templates", label: "Device Templates", Icon: Cpu },
+  { to: "/admin/devices", label: "Installed Devices", Icon: HardDrive },
   { to: "/admin/users", label: "User Management", Icon: UserCog },
   { to: "/admin/credentials", label: "Credential Management", Icon: KeyRound },
   { to: "/admin/collectors", label: "Collector Management", Icon: Activity },

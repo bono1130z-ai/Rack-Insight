@@ -65,6 +65,19 @@ Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack 
   run collectors; `USER` has read-only access to all inventory views and sees
   no administration menus.
 
+### What's new in 1.1.1
+
+- **Device Templates + Instances** — hardware models (vendor/model/CPU/…) are
+  now separate from installed servers; many servers can share one template
+  (`/api/device-templates`). Existing devices are migrated automatically.
+- **Create Multiple Devices** — install many identical servers at once
+  (`POST /api/devices/bulk`, sequential hostnames).
+- **Assign / remove from rack** without the spreadsheet editor, plus a
+  drag-and-drop 42U rack editor with an "Unplaced devices" palette.
+- **"Create Multiple Racks"** — clearer wording for bulk rack creation.
+
+See `docs/RELEASE_NOTES.md` for the full 1.1.1 notes and migration details.
+
 ### What's new in 1.1.0
 
 - **Inventory export** — JSON / CSV (zip) / multi-sheet Excel for a device,
