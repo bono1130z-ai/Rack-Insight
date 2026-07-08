@@ -106,6 +106,67 @@ async def test_bulk_device_creation(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_bulk_wizard_items_with_per_row_values(client: AsyncClient) -> None:
+    rid = await _rack(client)
+    cred = (
+        await client.post(
+            "/api/credentials",
+            json={"name": "ilo-default", "credential_type": "REDFISH", "username": "u",
+                  "password": "p"},
+        )
+    ).json()["id"]
+
+    # Reviewed provisioning table: per-row hostname / IPs / credential / U.
+    result = await client.post(
+        "/api/devices/bulk",
+        json={
+            "rack_id": rid,
+            "redfish_credential_id": cred,  # default credential for all rows
+            "items": [
+                {"hostname": "worker-1", "management_ip": "10.10.1.100",
+                 "ilo_ip": "10.20.1.100", "u_position": 1},
+                {"hostname": "worker-2", "management_ip": "10.10.1.101",
+                 "ilo_ip": "10.20.1.101", "u_position": 2},
+                {"hostname": "worker-3", "management_ip": "10.10.1.102",
+                 "ilo_ip": "10.20.1.102"},
+            ],
+        },
+    )
+    assert result.status_code == 201
+    created = result.json()["created"]
+    assert [d["hostname"] for d in created] == ["worker-1", "worker-2", "worker-3"]
+    # per-row IPs preserved, default credential applied to every row
+    assert created[0]["management_ip"] == "10.10.1.100"
+    assert created[1]["ilo_ip"] == "10.20.1.101"
+    assert all(d["redfish_credential_id"] == cred for d in created)
+
+    # rows with a U position were placed; the third (no U) is unplaced
+    layout = (await client.get(f"/api/racks/{rid}/layout")).json()
+    assert sorted(u["u_position"] for u in layout["units"]) == [1, 2]
+
+
+@pytest.mark.asyncio
+async def test_bulk_wizard_placement_conflict_rolls_back(client: AsyncClient) -> None:
+    rid = await _rack(client)
+    result = await client.post(
+        "/api/devices/bulk",
+        json={
+            "rack_id": rid,
+            "items": [
+                {"hostname": "a", "u_position": 5, "height": 2},
+                {"hostname": "b", "u_position": 6},  # overlaps a (5-6)
+            ],
+        },
+    )
+    assert result.status_code == 201
+    body = result.json()
+    assert body["created"] == []
+    assert any(e["hostname"] == "b" for e in body["errors"])
+    # nothing was committed
+    assert (await client.get(f"/api/devices?rack_id={rid}")).json() == []
+
+
+@pytest.mark.asyncio
 async def test_assign_and_unassign(client: AsyncClient) -> None:
     rid = await _rack(client)
     did = (

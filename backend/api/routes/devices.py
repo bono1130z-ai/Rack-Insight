@@ -22,6 +22,7 @@ from models import (
     User,
 )
 from schemas.device import (
+    MAX_BULK_DEVICES,
     VALID_COLLECTOR_TYPES,
     DeviceBulkCreate,
     DeviceBulkCreateError,
@@ -346,28 +347,74 @@ async def bulk_create_devices(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(require_admin),
 ) -> DeviceBulkCreateResult:
-    """Install multiple identical instances in one transaction (P3).
+    """Install multiple instances in one transaction (P3 / 1.1.2 wizard).
 
-    Hostnames come from `hostnames` if given, else generated from
-    `hostname_prefix` + sequential number. Duplicate hostnames within the same
-    rack are skipped; nothing is committed if any validation error occurs.
+    With `items`, each reviewed row carries its own hostname, IPs, credential
+    and optional U position (top-level fields are defaults). Without `items`,
+    hostnames come from `hostnames` or `hostname_prefix` + sequential number
+    (1.1.1 behavior). Duplicate hostnames in the rack are skipped; the whole
+    operation is one transaction.
     """
     try:
-        if payload.hostnames:
-            names = [h.strip() for h in payload.hostnames if h.strip()]
-        elif payload.hostname_prefix:
-            names = [
-                f"{payload.hostname_prefix}-{str(i).zfill(payload.pad_width)}"
-                for i in range(
-                    payload.start_index, payload.start_index + payload.quantity
+        collector_types = _serialize_collector_types(payload.collector_types)
+        base: dict = {"vendor": payload.vendor, "model": payload.model}
+        await _apply_template(db, base, payload.template_id)
+
+        # Normalize both modes into a list of per-row specs.
+        rows: list[dict] = []
+        if payload.items is not None:
+            for item in payload.items:
+                rows.append(
+                    {
+                        "hostname": item.hostname.strip(),
+                        "management_ip": item.management_ip or None,
+                        "ilo_ip": item.ilo_ip or None,
+                        "redfish_credential_id": item.redfish_credential_id
+                        or payload.redfish_credential_id,
+                        "ssh_credential_id": item.ssh_credential_id
+                        or payload.ssh_credential_id,
+                        "snmp_credential_id": item.snmp_credential_id
+                        or payload.snmp_credential_id,
+                        "u_position": item.u_position,
+                        "height": item.height or 1,
+                    }
                 )
-            ]
         else:
+            if payload.hostnames:
+                names = [h.strip() for h in payload.hostnames if h.strip()]
+            elif payload.hostname_prefix and payload.quantity:
+                names = [
+                    f"{payload.hostname_prefix}-{str(i).zfill(payload.pad_width)}"
+                    for i in range(
+                        payload.start_index, payload.start_index + payload.quantity
+                    )
+                ]
+            else:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Provide items, hostnames, or hostname_prefix + quantity",
+                )
+            rows = [
+                {
+                    "hostname": name,
+                    "management_ip": None,
+                    "ilo_ip": None,
+                    "redfish_credential_id": payload.redfish_credential_id,
+                    "ssh_credential_id": payload.ssh_credential_id,
+                    "snmp_credential_id": payload.snmp_credential_id,
+                    "u_position": None,
+                    "height": 1,
+                }
+                for name in names
+            ]
+
+        if len(rows) > MAX_BULK_DEVICES:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail="Provide either hostnames or a hostname_prefix",
+                detail=f"At most {MAX_BULK_DEVICES} devices per operation",
             )
 
+        names = [r["hostname"] for r in rows]
         existing = set(
             (
                 await db.execute(
@@ -378,16 +425,34 @@ async def bulk_create_devices(
             )
             .scalars().all()
         )
-        collector_types = _serialize_collector_types(payload.collector_types)
-        base: dict = {"vendor": payload.vendor, "model": payload.model}
-        await _apply_template(db, base, payload.template_id)
+
+        # Existing occupied U ranges in the rack, for optional placement.
+        occupied: set[int] = set()
+        for unit in (
+            (
+                await db.execute(
+                    select(RackUnit).where(RackUnit.rack_id == payload.rack_id)
+                )
+            )
+            .scalars().all()
+        ):
+            occupied |= set(range(unit.u_position, unit.u_position + unit.height))
+        rack = (
+            await db.execute(select(Rack).where(Rack.id == payload.rack_id))
+        ).scalar_one_or_none()
+        if rack is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Rack not found"
+            )
 
         created: list[Device] = []
+        placements: list[tuple[Device, int, int]] = []
         skipped: list[str] = []
         errors: list[DeviceBulkCreateError] = []
         seen: set[str] = set()
-        for name in names:
-            if name in existing or name in seen:
+        for row in rows:
+            name = row["hostname"]
+            if not name or name in existing or name in seen:
                 skipped.append(name)
                 continue
             seen.add(name)
@@ -398,16 +463,54 @@ async def bulk_create_devices(
                 device_type=payload.device_type,
                 vendor=base["vendor"],
                 model=base["model"],
+                management_ip=row["management_ip"],
+                ilo_ip=row["ilo_ip"],
                 orientation=payload.orientation,
                 collector_types=collector_types,
-                redfish_credential_id=payload.redfish_credential_id,
-                ssh_credential_id=payload.ssh_credential_id,
-                snmp_credential_id=payload.snmp_credential_id,
+                redfish_credential_id=row["redfish_credential_id"],
+                ssh_credential_id=row["ssh_credential_id"],
+                snmp_credential_id=row["snmp_credential_id"],
             )
             db.add(device)
             created.append(device)
 
+            u = row["u_position"]
+            if u is not None:
+                height = row["height"]
+                span = set(range(u, u + height))
+                if u + height - 1 > rack.height:
+                    errors.append(
+                        DeviceBulkCreateError(
+                            hostname=name,
+                            error=f"U{u} (+{height}U) exceeds rack height {rack.height}U",
+                        )
+                    )
+                elif span & occupied:
+                    errors.append(
+                        DeviceBulkCreateError(
+                            hostname=name, error=f"U{u} overlaps an occupied slot"
+                        )
+                    )
+                else:
+                    occupied |= span
+                    placements.append((device, u, height))
+
+        if errors:
+            # Reviewed-table placement conflicts are a validation failure:
+            # commit nothing so the admin can fix the table and resubmit.
+            await db.rollback()
+            return DeviceBulkCreateResult(created=[], skipped=skipped, errors=errors)
+
         await db.flush()
+        for device, u, height in placements:
+            db.add(
+                RackUnit(
+                    rack_id=payload.rack_id,
+                    u_position=u,
+                    height=height,
+                    device_id=device.id,
+                )
+            )
         for device in created:
             record_audit(
                 db, admin, ACTION_CREATE, "device", device.hostname, device.id,

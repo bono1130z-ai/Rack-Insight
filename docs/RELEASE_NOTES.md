@@ -1,5 +1,49 @@
 # Release Notes
 
+## 1.1.2 (2026-07-08)
+
+Patch release focused on administrator provisioning productivity. No database
+changes, no model changes, no breaking API changes — the 1.1.1 Device Template
+/ Installed Device model and the drag-and-drop rack editor are untouched.
+
+### Provisioning wizard (P1–P5)
+
+A two-step **"Provision Multiple Devices"** wizard replaces the simple bulk
+dialog on the Installed Devices page:
+
+1. **Setup** — pick a Device Template, quantity, hostname prefix, an optional
+   **Default Credential**, and choose Manual or Generate-Sequential mode for
+   Management IP and iLO IP (with a start address each).
+2. **Review** — an editable table (Hostname, Management IP, iLO IP, Credential,
+   Rack Position U) pre-filled with generated values. **Every cell is
+   editable**; rows can be removed. Confirm installs all rows in one request.
+
+- **Automatic hostnames** (P2): prefix + sequential number → `worker-1`,
+  `worker-2`, … editable per row.
+- **Optional sequential IPs** (P3): Management IP / iLO IP can be generated
+  from a start address (`10.10.1.100`, `10.10.1.101`, …) or entered manually;
+  generation never forces sequential addressing and every address stays
+  editable.
+- **Default credential** (P5): applied to every generated row, overridable per
+  row.
+- **Rack placement** (P4/P6): the U column is optional. Left blank, devices are
+  installed unplaced and positioned later with the existing drag-and-drop rack
+  editor (unchanged). If a U is provided, placement is validated (rack height +
+  overlap) and the whole batch rolls back on conflict so the table can be
+  fixed.
+
+### API
+
+- `POST /api/devices/bulk` gains an optional `items` array of per-row specs
+  (hostname, management_ip, ilo_ip, credential ids, u_position). Without
+  `items`, the 1.1.1 prefix/hostnames behavior is unchanged — fully backward
+  compatible. `quantity` is now optional (only required for prefix mode).
+
+### Upgrade notes
+
+- No migration required. `docker compose` up/pull the 1.1.2 images.
+- Default image tag is now `1.1.2`.
+
 ## 1.1.1 (2026-07-08)
 
 Patch release. Fully backward compatible: the 1.0/1.1 `/api/devices` API,

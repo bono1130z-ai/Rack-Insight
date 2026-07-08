@@ -13,6 +13,7 @@ import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Field, Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
+import { ProvisioningWizard } from "@/features/provisioning/ProvisioningWizard";
 import {
   useClusterRacks,
   useClusters,
@@ -81,14 +82,7 @@ export function DeviceManagementPage() {
   const [deleting, setDeleting] = useState<Device | null>(null);
   const [unassigning, setUnassigning] = useState<Device | null>(null);
   const [form, setForm] = useState<DeviceForm>(EMPTY_FORM);
-  const [bulkOpen, setBulkOpen] = useState(false);
-  const [bulkForm, setBulkForm] = useState({
-    template_id: "",
-    quantity: 3,
-    hostname_prefix: "",
-    start_index: 1,
-    pad_width: 2,
-  });
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   useEffect(() => {
     if (!clusterId && clusters && clusters.length > 0) setClusterId(clusters[0].id);
@@ -211,27 +205,6 @@ export function DeviceManagementPage() {
     },
     onError: (err) =>
       toast.error("Remove failed", err instanceof ApiError ? err.message : "Unexpected error"),
-  });
-
-  const bulkCreate = useMutation({
-    mutationFn: () =>
-      api.bulkCreateDevices({
-        rack_id: rackId,
-        template_id: bulkForm.template_id || null,
-        quantity: bulkForm.quantity,
-        hostname_prefix: bulkForm.hostname_prefix,
-        start_index: bulkForm.start_index,
-        pad_width: bulkForm.pad_width,
-      }),
-    onSuccess: (result) => {
-      const skipped =
-        result.skipped.length > 0 ? ` (skipped: ${result.skipped.join(", ")})` : "";
-      toast.success(`${result.created.length} devices created`, skipped || undefined);
-      setBulkOpen(false);
-      invalidate();
-    },
-    onError: (err) =>
-      toast.error("Bulk create failed", err instanceof ApiError ? err.message : "Unexpected error"),
   });
 
   // Choosing a template auto-fills vendor/model (kept editable for overrides).
@@ -362,11 +335,11 @@ export function DeviceManagementPage() {
           <>
             <Button
               variant="outline"
-              onClick={() => setBulkOpen(true)}
+              onClick={() => setWizardOpen(true)}
               disabled={!rackId}
-              title="Install several identical servers at once"
+              title="Provision several servers with generated hostnames/IPs, then review"
             >
-              <Layers className="h-4 w-4" /> Create Multiple Devices
+              <Layers className="h-4 w-4" /> Provision Multiple Devices
             </Button>
             <Button onClick={openCreate} disabled={!rackId}>
               <Plus className="h-4 w-4" /> Register Device
@@ -573,96 +546,15 @@ export function DeviceManagementPage() {
         </div>
       </Dialog>
 
-      <Dialog
-        open={bulkOpen}
-        onClose={() => setBulkOpen(false)}
-        title="Create Multiple Devices"
-        description="Installs several identical servers from a hostname prefix. Existing hostnames are skipped."
-        footer={
-          <>
-            <Button variant="outline" onClick={() => setBulkOpen(false)}>
-              Cancel
-            </Button>
-            <Button
-              onClick={() => bulkCreate.mutate()}
-              disabled={!bulkForm.hostname_prefix || bulkCreate.isPending}
-            >
-              {bulkCreate.isPending ? "Creating…" : `Create ${bulkForm.quantity} Devices`}
-            </Button>
-          </>
-        }
-      >
-        <div className="flex flex-col gap-3">
-          <Field label="Device Template">
-            <Select
-              value={bulkForm.template_id}
-              onChange={(e) => setBulkForm({ ...bulkForm, template_id: e.target.value })}
-            >
-              <option value="">(None)</option>
-              {templates?.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
-          <Field label="Hostname Prefix *">
-            <Input
-              value={bulkForm.hostname_prefix}
-              autoFocus
-              placeholder="e.g. DL320"
-              onChange={(e) =>
-                setBulkForm({ ...bulkForm, hostname_prefix: e.target.value })
-              }
-            />
-          </Field>
-          <div className="grid grid-cols-3 gap-3">
-            <Field label="Quantity">
-              <Input
-                type="number"
-                min={1}
-                max={100}
-                value={bulkForm.quantity}
-                onChange={(e) =>
-                  setBulkForm({ ...bulkForm, quantity: Number(e.target.value) })
-                }
-              />
-            </Field>
-            <Field label="Start #">
-              <Input
-                type="number"
-                min={0}
-                value={bulkForm.start_index}
-                onChange={(e) =>
-                  setBulkForm({ ...bulkForm, start_index: Number(e.target.value) })
-                }
-              />
-            </Field>
-            <Field label="Pad width">
-              <Input
-                type="number"
-                min={1}
-                max={6}
-                value={bulkForm.pad_width}
-                onChange={(e) =>
-                  setBulkForm({ ...bulkForm, pad_width: Number(e.target.value) })
-                }
-              />
-            </Field>
-          </div>
-          {bulkForm.hostname_prefix && (
-            <p className="text-xs text-gray-500">
-              Will create: {bulkForm.hostname_prefix}-
-              {String(bulkForm.start_index).padStart(bulkForm.pad_width, "0")} …{" "}
-              {bulkForm.hostname_prefix}-
-              {String(bulkForm.start_index + bulkForm.quantity - 1).padStart(
-                bulkForm.pad_width,
-                "0",
-              )}
-            </p>
-          )}
-        </div>
-      </Dialog>
+      <ProvisioningWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        rackId={rackId}
+        rackName={racks?.find((r) => r.id === rackId)?.name ?? ""}
+        templates={templates ?? []}
+        credentials={credentials ?? []}
+        onCreated={invalidate}
+      />
 
       <ConfirmDialog
         open={unassigning !== null}

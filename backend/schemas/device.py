@@ -38,17 +38,42 @@ class DeviceCreate(BaseModel):
     height: int = Field(default=1, ge=1)
 
 
-class DeviceBulkCreate(BaseModel):
-    """Install multiple identical servers at once (P3).
+MAX_BULK_DEVICES = 100
 
-    Hostnames are either provided explicitly, or generated from
-    hostname_prefix + a zero-padded sequential number.
+
+class DeviceBulkItem(BaseModel):
+    """One reviewed row from the provisioning wizard (1.1.2).
+
+    Every field is an already-resolved value the administrator confirmed in
+    the editable table; per-row values override the bulk defaults.
+    """
+
+    hostname: str = Field(min_length=1, max_length=255)
+    management_ip: str | None = None
+    ilo_ip: str | None = None
+    redfish_credential_id: uuid.UUID | None = None
+    ssh_credential_id: uuid.UUID | None = None
+    snmp_credential_id: uuid.UUID | None = None
+    u_position: int | None = Field(default=None, ge=1)
+    height: int | None = Field(default=None, ge=1)
+
+
+class DeviceBulkCreate(BaseModel):
+    """Install multiple servers at once.
+
+    Two mutually compatible modes:
+    - `items`: explicit per-row list from the provisioning wizard (1.1.2).
+      Top-level template/device_type/vendor/model/orientation/collector_types
+      and credential ids act as defaults; each item may override.
+    - otherwise (1.1.1 behavior): hostnames are provided explicitly via
+      `hostnames`, or generated from `hostname_prefix` + sequential number.
     """
 
     rack_id: uuid.UUID
     template_id: uuid.UUID | None = None
     device_type: DeviceType = DeviceType.SERVER
-    quantity: int = Field(ge=1, le=100)
+    items: list[DeviceBulkItem] | None = None
+    quantity: int | None = Field(default=None, ge=1, le=MAX_BULK_DEVICES)
     hostname_prefix: str | None = Field(default=None, max_length=200)
     hostnames: list[str] | None = None
     start_index: int = Field(default=1, ge=0)

@@ -65,6 +65,20 @@ Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack 
   run collectors; `USER` has read-only access to all inventory views and sees
   no administration menus.
 
+### What's new in 1.1.2
+
+- **Provisioning wizard** — a two-step "Provision Multiple Devices" flow:
+  choose template / quantity / hostname prefix / default credential and
+  optional sequential Management + iLO IP generation, then review and edit
+  every row (Hostname, Management IP, iLO IP, Credential, U) before
+  installing. Automation fills sensible defaults; every value stays editable.
+- `POST /api/devices/bulk` accepts an optional per-row `items` array
+  (backward compatible with the 1.1.1 prefix mode).
+- The 1.1.1 drag-and-drop rack editor is unchanged and remains the way to
+  place devices into U slots.
+
+See `docs/RELEASE_NOTES.md` for the full 1.1.2 notes.
+
 ### What's new in 1.1.1
 
 - **Device Templates + Instances** — hardware models (vendor/model/CPU/…) are
