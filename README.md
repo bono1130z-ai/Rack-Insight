@@ -65,6 +65,15 @@ Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack 
   run collectors; `USER` has read-only access to all inventory views and sees
   no administration menus.
 
+### What's new in 1.1.3
+
+Stabilization patch. Highlights: deleting a device no longer strands its rack
+slot (orphan placements are prevented and cleaned up); placement validation is
+consistent across create/move/bulk (meaningful 422s, shared logic); bulk
+provisioning validates duplicate IPs; moving a device between racks no longer
+strands its placement; hostname uniqueness and template references are enforced
+consistently. See `docs/RELEASE_NOTES.md` for the full list of fixes.
+
 ### What's new in 1.1.2
 
 - **Provisioning wizard** — a two-step "Provision Multiple Devices" flow:

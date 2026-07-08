@@ -167,6 +167,136 @@ async def test_bulk_wizard_placement_conflict_rolls_back(client: AsyncClient) ->
 
 
 @pytest.mark.asyncio
+async def test_delete_device_removes_placement(client: AsyncClient) -> None:
+    """Regression (1.1.3): deleting a placed device must not orphan its
+    rack_unit, and the freed U must be reusable immediately."""
+    rid = await _rack(client)
+    a = (
+        await client.post("/api/devices", json={"rack_id": rid, "hostname": "a", "u_position": 10})
+    ).json()["id"]
+    b = (
+        await client.post("/api/devices", json={"rack_id": rid, "hostname": "b", "u_position": 20})
+    ).json()["id"]
+
+    assert (await client.delete(f"/api/devices/{a}")).status_code == 204
+    layout = (await client.get(f"/api/racks/{rid}/layout")).json()
+    # no orphan (device is None) units remain
+    assert all(u["device"] is not None for u in layout["units"])
+    assert [u["u_position"] for u in layout["units"]] == [20]
+
+    # the freed U10 can be reused
+    assert (
+        await client.put(f"/api/devices/{b}/position", json={"u_position": 10})
+    ).status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_create_at_occupied_u_is_422(client: AsyncClient) -> None:
+    """create_device must validate placement (meaningful 422, not 500)."""
+    rid = await _rack(client)
+    await client.post("/api/devices", json={"rack_id": rid, "hostname": "a", "u_position": 5})
+    conflict = await client.post(
+        "/api/devices", json={"rack_id": rid, "hostname": "b", "u_position": 5}
+    )
+    assert conflict.status_code == 422
+    assert "overlap" in conflict.json()["detail"].lower()
+
+    too_tall = await client.post(
+        "/api/devices",
+        json={"rack_id": rid, "hostname": "c", "u_position": 42, "height": 4},
+    )
+    assert too_tall.status_code == 422
+    assert "exceeds" in too_tall.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_duplicate_hostname_in_rack_rejected(client: AsyncClient) -> None:
+    rid = await _rack(client)
+    assert (
+        await client.post("/api/devices", json={"rack_id": rid, "hostname": "dup"})
+    ).status_code == 201
+    again = await client.post("/api/devices", json={"rack_id": rid, "hostname": "dup"})
+    assert again.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_bulk_duplicate_ip_rejected(client: AsyncClient) -> None:
+    rid = await _rack(client)
+    result = await client.post(
+        "/api/devices/bulk",
+        json={
+            "rack_id": rid,
+            "items": [
+                {"hostname": "a", "management_ip": "10.0.0.1"},
+                {"hostname": "b", "management_ip": "10.0.0.1"},  # duplicate
+            ],
+        },
+    )
+    assert result.status_code == 201
+    body = result.json()
+    assert body["created"] == []
+    assert any("Management IP" in e["error"] for e in body["errors"])
+    assert (await client.get(f"/api/devices?rack_id={rid}")).json() == []
+
+
+@pytest.mark.asyncio
+async def test_update_rack_change_clears_placement(client: AsyncClient) -> None:
+    """Moving a device to another rack via PATCH must not strand its placement
+    in the old rack (Required Fix 5)."""
+    cid = (await client.post("/api/clusters", json={"name": "C"})).json()["id"]
+    r1 = (await client.post("/api/racks", json={"cluster_id": cid, "name": "R1"})).json()["id"]
+    r2 = (await client.post("/api/racks", json={"cluster_id": cid, "name": "R2"})).json()["id"]
+    did = (
+        await client.post("/api/devices", json={"rack_id": r1, "hostname": "m", "u_position": 3})
+    ).json()["id"]
+
+    assert (await client.patch(f"/api/devices/{did}", json={"rack_id": r2})).status_code == 200
+    # old rack no longer shows the device; no orphan unit left behind
+    assert (await client.get(f"/api/racks/{r1}/layout")).json()["units"] == []
+    assert (await client.get(f"/api/racks/{r2}/layout")).json()["units"] == []
+
+
+@pytest.mark.asyncio
+async def test_update_invalid_template_rejected(client: AsyncClient) -> None:
+    import uuid as _uuid
+
+    rid = await _rack(client)
+    did = (
+        await client.post("/api/devices", json={"rack_id": rid, "hostname": "t"})
+    ).json()["id"]
+    bad = await client.patch(
+        f"/api/devices/{did}", json={"template_id": str(_uuid.uuid4())}
+    )
+    assert bad.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_multi_u_device_move_preserves_height(client: AsyncClient) -> None:
+    rid = await _rack(client)
+    did = (
+        await client.post(
+            "/api/devices",
+            json={"rack_id": rid, "hostname": "big", "u_position": 10, "height": 2},
+        )
+    ).json()["id"]
+    # move without specifying height keeps the 2U footprint
+    assert (
+        await client.put(f"/api/devices/{did}/position", json={"u_position": 20})
+    ).status_code == 200
+    layout = (await client.get(f"/api/racks/{rid}/layout")).json()
+    unit = next(u for u in layout["units"] if u["device"]["id"] == did)
+    assert unit["u_position"] == 20
+    assert unit["height"] == 2
+    # a device cannot be dropped into the 2U device's second U (21)
+    other = (
+        await client.post("/api/devices", json={"rack_id": rid, "hostname": "x"})
+    ).json()["id"]
+    assert (
+        await client.put(f"/api/devices/{other}/position", json={"u_position": 21})
+    ).status_code == 422
+
+
+@pytest.mark.asyncio
 async def test_assign_and_unassign(client: AsyncClient) -> None:
     rid = await _rack(client)
     did = (

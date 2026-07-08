@@ -139,6 +139,20 @@ export function ProvisioningWizard({
   const hasDuplicate =
     new Set(validRows.map((r) => r.hostname.trim())).size !== validRows.length;
 
+  const firstDuplicate = (values: string[]): string | null => {
+    const seen = new Set<string>();
+    for (const value of values) {
+      const v = value.trim();
+      if (!v) continue;
+      if (seen.has(v)) return v;
+      seen.add(v);
+    }
+    return null;
+  };
+  const dupMgmt = firstDuplicate(rows.map((r) => r.management_ip));
+  const dupIlo = firstDuplicate(rows.map((r) => r.ilo_ip));
+  const hasBlocker = hasDuplicate || dupMgmt !== null || dupIlo !== null;
+
   return (
     <Dialog
       open={open}
@@ -167,7 +181,7 @@ export function ProvisioningWizard({
             </Button>
             <Button
               onClick={() => install.mutate()}
-              disabled={validRows.length === 0 || hasDuplicate || install.isPending}
+              disabled={validRows.length === 0 || hasBlocker || install.isPending}
             >
               {install.isPending
                 ? "Installing…"
@@ -277,6 +291,16 @@ export function ProvisioningWizard({
           {hasDuplicate && (
             <p className="text-xs text-red-600">
               Duplicate hostnames detected — make each hostname unique.
+            </p>
+          )}
+          {dupMgmt && (
+            <p className="text-xs text-red-600">
+              Duplicate Management IP {dupMgmt} — each address must be unique.
+            </p>
+          )}
+          {dupIlo && (
+            <p className="text-xs text-red-600">
+              Duplicate iLO IP {dupIlo} — each address must be unique.
             </p>
           )}
           <div className="overflow-x-auto">

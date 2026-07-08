@@ -1,5 +1,66 @@
 # Release Notes
 
+## 1.1.3 (2026-07-08)
+
+Final stabilization patch before 1.2.0. Correctness, consistency and
+integrity fixes across the rack-placement and provisioning workflows. No
+breaking API changes, no model redesign; all existing data remains valid. One
+data-safe migration (0007) cleans up records stranded by an older bug.
+
+### Rack placement (Required Fix 1) — bugs fixed
+
+- **Orphan rack placements corrupted the layout.** `rack_units.device_id` is
+  `ON DELETE SET NULL`, so deleting an Installed Device left its rack_unit
+  behind with a NULL device — permanently occupying its U slot and rendering a
+  dead cell that no device could be placed into. `delete_device` now removes
+  the placement, and **migration 0007** purges any orphans left by older
+  versions. Result: deleting a device frees its U immediately.
+- **Overlap check skipped orphan/NULL rows.** `move_device` excluded the
+  device's own unit with `RackUnit.device_id != device_id`, which in SQL also
+  excludes NULL-device rows — so a stranded slot both blocked moves and could
+  raise a 500 on the unique `(rack_id, u_position)` constraint. Overlap now
+  excludes the device's own unit by its **unit id**.
+- **`create_device` performed no placement validation.** Creating a device at
+  an occupied U raised an opaque 500 (unique-constraint violation) and rack
+  height was never checked. It now returns a meaningful 422, consistent with
+  `move_device` and bulk creation.
+- All three placement paths (create / move / bulk) now share one
+  `placement_service` (rack-height + overlap), removing duplicated,
+  divergent logic.
+
+### Bulk provisioning (Required Fix 2)
+
+- Added **duplicate-IP validation** within a batch (Management IP and iLO IP);
+  conflicts are reported and the whole batch rolls back, matching the existing
+  duplicate-hostname behavior. The provisioning wizard now also flags duplicate
+  hostnames/IPs client-side before submission.
+
+### Data & business-logic integrity (Required Fix 4/5)
+
+- **PATCH could strand placements.** Moving a device to another rack via
+  `PATCH /api/devices/{id}` left its rack_unit in the old rack. The update now
+  clears the stale placement (device becomes unplaced until re-positioned).
+- **Hostname uniqueness is now enforced consistently.** Single-device create
+  and update reject a duplicate hostname within the same rack (409) — bulk
+  already did this.
+- **Template references are validated on update.** `PATCH` with a non-existent
+  `template_id` now returns 422 instead of failing at the database.
+- Deleting a template in use remains blocked; deleting a rack still cascades to
+  its devices and placements (no orphans).
+
+### Frontend / backend consistency (Required Fix 3) & UI polish (Required Fix 6)
+
+- Removed duplicated placement logic; validation errors are now meaningful
+  (422 with a clear message) instead of generic 500s.
+- Provisioning wizard: client-side duplicate hostname/IP guards with inline
+  messages and a disabled Install button until resolved.
+
+### Upgrade notes
+
+- `docker compose` up/pull the 1.1.3 images. Migration 0007 runs automatically
+  and is data-safe (removes only NULL-device orphan rack_units).
+- Default image tag is now `1.1.3`.
+
 ## 1.1.2 (2026-07-08)
 
 Patch release focused on administrator provisioning productivity. No database

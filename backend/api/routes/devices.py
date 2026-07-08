@@ -45,6 +45,7 @@ from services.audit_service import (
 )
 from services.health_service import compute_health
 from services.inventory_service import get_device_inventory, get_latest_snapshot
+from services.placement_service import validate_placement
 from services.refresh_service import refresh_device
 from utils.crypto import encrypt_secret
 from utils.logging import get_logger
@@ -91,6 +92,29 @@ async def _apply_template(
         data["vendor"] = template.vendor
     if not data.get("model"):
         data["model"] = template.model
+
+
+async def _require_rack(db: AsyncSession, rack_id: uuid.UUID) -> Rack:
+    rack = (await db.execute(select(Rack).where(Rack.id == rack_id))).scalar_one_or_none()
+    if rack is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Rack not found")
+    return rack
+
+
+async def _ensure_hostname_free(
+    db: AsyncSession, rack_id: uuid.UUID, hostname: str, exclude_device_id: uuid.UUID | None = None
+) -> None:
+    """Hostnames must be unique within a rack (consistent with bulk creation)."""
+    query = select(Device.id).where(
+        Device.rack_id == rack_id, Device.hostname == hostname
+    )
+    if exclude_device_id is not None:
+        query = query.where(Device.id != exclude_device_id)
+    if (await db.execute(query)).scalar_one_or_none() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Hostname '{hostname}' already exists in this rack",
+        )
 
 
 async def _get_device(db: AsyncSession, device_id: uuid.UUID) -> Device:
@@ -301,6 +325,11 @@ async def create_device(
     admin: User = Depends(require_admin),
 ) -> Device:
     try:
+        rack = await _require_rack(db, payload.rack_id)
+        await _ensure_hostname_free(db, payload.rack_id, payload.hostname)
+        if payload.u_position is not None:
+            await validate_placement(db, rack, payload.u_position, payload.height)
+
         data = payload.model_dump(exclude={"u_position", "height"})
         for plain_field, encrypted_field in _SECRET_FIELDS.items():
             data[encrypted_field] = encrypt_secret(data.pop(plain_field, None))
@@ -450,12 +479,31 @@ async def bulk_create_devices(
         skipped: list[str] = []
         errors: list[DeviceBulkCreateError] = []
         seen: set[str] = set()
+        seen_mgmt: set[str] = set()
+        seen_ilo: set[str] = set()
         for row in rows:
             name = row["hostname"]
             if not name or name in existing or name in seen:
                 skipped.append(name)
                 continue
             seen.add(name)
+
+            # Duplicate IP detection within the batch (Required Fix 2).
+            mgmt, ilo = row["management_ip"], row["ilo_ip"]
+            if mgmt and mgmt in seen_mgmt:
+                errors.append(
+                    DeviceBulkCreateError(
+                        hostname=name, error=f"Duplicate Management IP {mgmt}"
+                    )
+                )
+            elif mgmt:
+                seen_mgmt.add(mgmt)
+            if ilo and ilo in seen_ilo:
+                errors.append(
+                    DeviceBulkCreateError(hostname=name, error=f"Duplicate iLO IP {ilo}")
+                )
+            elif ilo:
+                seen_ilo.add(ilo)
             device = Device(
                 rack_id=payload.rack_id,
                 template_id=payload.template_id,
@@ -549,6 +597,30 @@ async def update_device(
     device = await _get_device(db, device_id)
     old = snapshot_entity(device)
     data = payload.model_dump(exclude_unset=True)
+
+    # Validate identity/reference changes before applying (Required Fix 3/5).
+    target_rack_id = data.get("rack_id", device.rack_id)
+    if "hostname" in data and (
+        data["hostname"] != device.hostname or target_rack_id != device.rack_id
+    ):
+        await _ensure_hostname_free(
+            db, target_rack_id, data["hostname"], exclude_device_id=device.id
+        )
+    if data.get("template_id") is not None:
+        template_data: dict = {}
+        await _apply_template(db, template_data, data["template_id"])
+
+    # Moving a device to another rack invalidates its old U placement — clear
+    # it so no rack_unit is stranded in the previous rack (device becomes
+    # unplaced and is positioned again via drag-and-drop).
+    rack_changed = "rack_id" in data and data["rack_id"] != device.rack_id
+    if rack_changed:
+        for unit in (
+            (await db.execute(select(RackUnit).where(RackUnit.device_id == device_id)))
+            .scalars().all()
+        ):
+            await db.delete(unit)
+
     for plain_field, encrypted_field in _SECRET_FIELDS.items():
         if plain_field in data:
             data[encrypted_field] = encrypt_secret(data.pop(plain_field))
@@ -598,30 +670,15 @@ async def move_device(
         unit = unit_result.scalars().first()
         height = payload.height if payload.height is not None else (unit.height if unit else 1)
 
-        if payload.u_position + height - 1 > rack.height:
-            raise HTTPException(
-                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                detail=f"U{payload.u_position} (+{height}U) exceeds rack height {rack.height}U",
-            )
-
-        others = (
-            (
-                await db.execute(
-                    select(RackUnit).where(
-                        RackUnit.rack_id == target_rack_id, RackUnit.device_id != device_id
-                    )
-                )
-            )
-            .scalars().all()
+        # Exclude the device's own unit by its id (not device_id) so orphan or
+        # NULL-device rows are never silently skipped in the overlap check.
+        await validate_placement(
+            db,
+            rack,
+            payload.u_position,
+            height,
+            exclude_unit_id=unit.id if unit is not None else None,
         )
-        target_span = set(range(payload.u_position, payload.u_position + height))
-        for other in others:
-            other_span = set(range(other.u_position, other.u_position + other.height))
-            if target_span & other_span:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail=f"U{payload.u_position} overlaps an existing unit at U{other.u_position}",
-                )
 
         device.rack_id = target_rack_id
         if unit is None:
@@ -695,6 +752,14 @@ async def delete_device(
 ) -> None:
     device = await _get_device(db, device_id)
     await cache_delete(device_inventory_key(str(device_id)))
+    # Remove rack placement first so no orphan rack_unit (device_id NULL) is
+    # left occupying a U slot — the FK is ON DELETE SET NULL, which would
+    # otherwise strand the placement and corrupt the rack layout.
+    for unit in (
+        (await db.execute(select(RackUnit).where(RackUnit.device_id == device_id)))
+        .scalars().all()
+    ):
+        await db.delete(unit)
     record_audit(
         db, admin, ACTION_DELETE, "device", device.hostname, device.id,
         old_value=snapshot_entity(device),
