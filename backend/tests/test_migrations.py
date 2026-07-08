@@ -131,7 +131,10 @@ def test_adopts_partial_create_all_database(
 
     conn = sqlite3.connect(db_path)
     cluster_columns = [r[1] for r in conn.execute("PRAGMA table_info(clusters)")]
-    device_columns = [r[1] for r in conn.execute("PRAGMA table_info(devices)")]
+    # devices was renamed to rack_device_instances at revision 0006.
+    instance_columns = [
+        r[1] for r in conn.execute("PRAGMA table_info(rack_device_instances)")
+    ]
     revision = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
     preserved = conn.execute("SELECT name FROM clusters").fetchone()[0]
     conn.close()
@@ -140,8 +143,9 @@ def test_adopts_partial_create_all_database(
 
     head = ScriptDirectory.from_config(config).get_current_head()
     assert "site" in cluster_columns
-    assert "orientation" in device_columns
-    assert "redfish_credential_id" in device_columns
+    assert "orientation" in instance_columns
+    assert "redfish_credential_id" in instance_columns
+    assert "template_id" in instance_columns
     assert revision == head
     assert preserved == "Legacy"
 

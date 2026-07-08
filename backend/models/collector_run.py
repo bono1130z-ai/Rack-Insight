@@ -12,7 +12,10 @@ class CollectorRun(TimestampedModel):
     __tablename__ = "collector_runs"
 
     device_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False, index=True
+        Uuid,
+        ForeignKey("rack_device_instances.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     success: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     duration_ms: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

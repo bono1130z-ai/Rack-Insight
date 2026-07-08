@@ -11,6 +11,9 @@ VALID_COLLECTOR_TYPES = {"REDFISH", "SSH", "CISCO"}
 
 class DeviceCreate(BaseModel):
     rack_id: uuid.UUID
+    # Optional shared hardware model. When set, vendor/model are inherited
+    # from the template if not provided explicitly.
+    template_id: uuid.UUID | None = None
     hostname: str = Field(min_length=1, max_length=255)
     display_name: str | None = None
     device_type: DeviceType = DeviceType.SERVER
@@ -28,14 +31,53 @@ class DeviceCreate(BaseModel):
     redfish_credential_id: uuid.UUID | None = None
     ssh_credential_id: uuid.UUID | None = None
     snmp_credential_id: uuid.UUID | None = None
+    asset_tag: str | None = None
+    serial_override: str | None = None
+    description: str | None = None
     u_position: int | None = Field(default=None, ge=1)
     height: int = Field(default=1, ge=1)
+
+
+class DeviceBulkCreate(BaseModel):
+    """Install multiple identical servers at once (P3).
+
+    Hostnames are either provided explicitly, or generated from
+    hostname_prefix + a zero-padded sequential number.
+    """
+
+    rack_id: uuid.UUID
+    template_id: uuid.UUID | None = None
+    device_type: DeviceType = DeviceType.SERVER
+    quantity: int = Field(ge=1, le=100)
+    hostname_prefix: str | None = Field(default=None, max_length=200)
+    hostnames: list[str] | None = None
+    start_index: int = Field(default=1, ge=0)
+    pad_width: int = Field(default=2, ge=1, le=6)
+    vendor: str | None = None
+    model: str | None = None
+    orientation: DeviceOrientation = DeviceOrientation.FRONT
+    collector_types: list[str] = Field(default_factory=list)
+    redfish_credential_id: uuid.UUID | None = None
+    ssh_credential_id: uuid.UUID | None = None
+    snmp_credential_id: uuid.UUID | None = None
+
+
+class DeviceBulkCreateError(BaseModel):
+    hostname: str
+    error: str
+
+
+class DeviceBulkCreateResult(BaseModel):
+    created: list["DeviceResponse"]
+    skipped: list[str]
+    errors: list[DeviceBulkCreateError]
 
 
 class DeviceUpdate(BaseModel):
     hostname: str | None = Field(default=None, min_length=1, max_length=255)
     display_name: str | None = None
     device_type: DeviceType | None = None
+    template_id: uuid.UUID | None = None
     vendor: str | None = None
     model: str | None = None
     management_ip: str | None = None
@@ -50,6 +92,9 @@ class DeviceUpdate(BaseModel):
     redfish_credential_id: uuid.UUID | None = None
     ssh_credential_id: uuid.UUID | None = None
     snmp_credential_id: uuid.UUID | None = None
+    asset_tag: str | None = None
+    serial_override: str | None = None
+    description: str | None = None
     enabled: bool | None = None
     rack_id: uuid.UUID | None = None
 
@@ -59,6 +104,7 @@ class DeviceResponse(BaseModel):
 
     id: uuid.UUID
     rack_id: uuid.UUID
+    template_id: uuid.UUID | None
     hostname: str
     display_name: str | None
     device_type: DeviceType
@@ -75,6 +121,9 @@ class DeviceResponse(BaseModel):
     redfish_credential_id: uuid.UUID | None
     ssh_credential_id: uuid.UUID | None
     snmp_credential_id: uuid.UUID | None
+    asset_tag: str | None = None
+    serial_override: str | None = None
+    description: str | None = None
     created_at: datetime
     updated_at: datetime
 
@@ -87,10 +136,15 @@ class DeviceDetailResponse(DeviceResponse):
 
 
 class DevicePositionUpdate(BaseModel):
-    """Move a device inside its rack (U selection / drag & drop)."""
+    """Assign/move a device to a U position (U selection / drag & drop).
+
+    `rack_id` optionally moves the device into a different rack (assign to
+    rack); omitted keeps it in its current rack.
+    """
 
     u_position: int = Field(ge=1)
     height: int | None = Field(default=None, ge=1)
+    rack_id: uuid.UUID | None = None
 
 
 class DeviceSearchResult(DeviceResponse):

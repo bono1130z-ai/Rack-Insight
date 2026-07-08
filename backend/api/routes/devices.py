@@ -12,6 +12,7 @@ from models import (
     CPU,
     Device,
     DeviceStatus,
+    DeviceTemplate,
     Firmware,
     Rack,
     RackUnit,
@@ -22,6 +23,9 @@ from models import (
 )
 from schemas.device import (
     VALID_COLLECTOR_TYPES,
+    DeviceBulkCreate,
+    DeviceBulkCreateError,
+    DeviceBulkCreateResult,
     DeviceCreate,
     DeviceDetailResponse,
     DevicePositionUpdate,
@@ -66,6 +70,26 @@ def _serialize_collector_types(types: list[str] | None) -> str | None:
             detail=f"Invalid collector types: {', '.join(sorted(invalid))}",
         )
     return ",".join(dict.fromkeys(normalized)) or None
+
+
+async def _apply_template(
+    db: AsyncSession, data: dict, template_id: uuid.UUID | None
+) -> None:
+    """Inherit vendor/model from the template when not explicitly provided."""
+    if template_id is None:
+        return
+    template = (
+        await db.execute(select(DeviceTemplate).where(DeviceTemplate.id == template_id))
+    ).scalar_one_or_none()
+    if template is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Device template not found",
+        )
+    if not data.get("vendor"):
+        data["vendor"] = template.vendor
+    if not data.get("model"):
+        data["model"] = template.model
 
 
 async def _get_device(db: AsyncSession, device_id: uuid.UUID) -> Device:
@@ -280,6 +304,7 @@ async def create_device(
         for plain_field, encrypted_field in _SECRET_FIELDS.items():
             data[encrypted_field] = encrypt_secret(data.pop(plain_field, None))
         data["collector_types"] = _serialize_collector_types(data.pop("collector_types", None))
+        await _apply_template(db, data, payload.template_id)
         device = Device(**data)
         db.add(device)
         await db.flush()
@@ -308,6 +333,106 @@ async def create_device(
         logger.exception("Device creation failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Device creation failed"
+        ) from exc
+
+
+@router.post(
+    "/bulk",
+    response_model=DeviceBulkCreateResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def bulk_create_devices(
+    payload: DeviceBulkCreate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> DeviceBulkCreateResult:
+    """Install multiple identical instances in one transaction (P3).
+
+    Hostnames come from `hostnames` if given, else generated from
+    `hostname_prefix` + sequential number. Duplicate hostnames within the same
+    rack are skipped; nothing is committed if any validation error occurs.
+    """
+    try:
+        if payload.hostnames:
+            names = [h.strip() for h in payload.hostnames if h.strip()]
+        elif payload.hostname_prefix:
+            names = [
+                f"{payload.hostname_prefix}-{str(i).zfill(payload.pad_width)}"
+                for i in range(
+                    payload.start_index, payload.start_index + payload.quantity
+                )
+            ]
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="Provide either hostnames or a hostname_prefix",
+            )
+
+        existing = set(
+            (
+                await db.execute(
+                    select(Device.hostname).where(
+                        Device.rack_id == payload.rack_id, Device.hostname.in_(names)
+                    )
+                )
+            )
+            .scalars().all()
+        )
+        collector_types = _serialize_collector_types(payload.collector_types)
+        base: dict = {"vendor": payload.vendor, "model": payload.model}
+        await _apply_template(db, base, payload.template_id)
+
+        created: list[Device] = []
+        skipped: list[str] = []
+        errors: list[DeviceBulkCreateError] = []
+        seen: set[str] = set()
+        for name in names:
+            if name in existing or name in seen:
+                skipped.append(name)
+                continue
+            seen.add(name)
+            device = Device(
+                rack_id=payload.rack_id,
+                template_id=payload.template_id,
+                hostname=name,
+                device_type=payload.device_type,
+                vendor=base["vendor"],
+                model=base["model"],
+                orientation=payload.orientation,
+                collector_types=collector_types,
+                redfish_credential_id=payload.redfish_credential_id,
+                ssh_credential_id=payload.ssh_credential_id,
+                snmp_credential_id=payload.snmp_credential_id,
+            )
+            db.add(device)
+            created.append(device)
+
+        await db.flush()
+        for device in created:
+            record_audit(
+                db, admin, ACTION_CREATE, "device", device.hostname, device.id,
+                new_value=snapshot_entity(device),
+            )
+        await db.commit()
+        for device in created:
+            await db.refresh(device)
+        logger.info(
+            "Bulk device creation: %d created, %d skipped", len(created), len(skipped)
+        )
+        return DeviceBulkCreateResult(
+            created=[DeviceResponse.model_validate(d) for d in created],
+            skipped=skipped,
+            errors=errors,
+        )
+    except HTTPException:
+        await db.rollback()
+        raise
+    except Exception as exc:
+        await db.rollback()
+        logger.exception("Bulk device creation failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Bulk device creation failed",
         ) from exc
 
 
@@ -343,12 +468,27 @@ async def update_device(
     dependencies=[Depends(require_admin)],
 )
 async def move_device(
-    device_id: uuid.UUID, payload: DevicePositionUpdate, db: AsyncSession = Depends(get_db)
+    device_id: uuid.UUID,
+    payload: DevicePositionUpdate,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
 ) -> Device:
-    """Move a device to a new U position (drag & drop / U selection)."""
+    """Assign/move a device to a U position (drag & drop / U selection).
+
+    Optionally moves it into a different rack (`rack_id`) — the 'assign to
+    rack' action from the Management workflow.
+    """
     device = await _get_device(db, device_id)
     try:
-        rack = device.rack
+        target_rack_id = payload.rack_id or device.rack_id
+        rack = (
+            await db.execute(select(Rack).where(Rack.id == target_rack_id))
+        ).scalar_one_or_none()
+        if rack is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Target rack not found"
+            )
+
         unit_result = await db.execute(
             select(RackUnit).where(RackUnit.device_id == device_id)
         )
@@ -365,7 +505,7 @@ async def move_device(
             (
                 await db.execute(
                     select(RackUnit).where(
-                        RackUnit.rack_id == device.rack_id, RackUnit.device_id != device_id
+                        RackUnit.rack_id == target_rack_id, RackUnit.device_id != device_id
                     )
                 )
             )
@@ -380,18 +520,24 @@ async def move_device(
                     detail=f"U{payload.u_position} overlaps an existing unit at U{other.u_position}",
                 )
 
+        device.rack_id = target_rack_id
         if unit is None:
             db.add(
                 RackUnit(
-                    rack_id=device.rack_id,
+                    rack_id=target_rack_id,
                     u_position=payload.u_position,
                     height=height,
                     device_id=device_id,
                 )
             )
         else:
+            unit.rack_id = target_rack_id
             unit.u_position = payload.u_position
             unit.height = height
+        record_audit(
+            db, admin, ACTION_UPDATE, "device", device.hostname, device.id,
+            new_value={"rack_id": str(target_rack_id), "u_position": payload.u_position},
+        )
         await db.commit()
         await db.refresh(device)
         return device
@@ -403,6 +549,38 @@ async def move_device(
         logger.exception("Device move failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Device move failed"
+        ) from exc
+
+
+@router.delete(
+    "/{device_id}/position",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_admin)],
+)
+async def unassign_device(
+    device_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(require_admin),
+) -> None:
+    """Remove a device from its rack slot (uninstall) without deleting it."""
+    device = await _get_device(db, device_id)
+    try:
+        units = (
+            (await db.execute(select(RackUnit).where(RackUnit.device_id == device_id)))
+            .scalars().all()
+        )
+        for unit in units:
+            await db.delete(unit)
+        record_audit(
+            db, admin, ACTION_UPDATE, "device", device.hostname, device.id,
+            old_value={"placed": True}, new_value={"placed": False},
+        )
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        logger.exception("Device unassign failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Device unassign failed"
         ) from exc
 
 

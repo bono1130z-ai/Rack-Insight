@@ -12,6 +12,7 @@ from api.routes import clusters as cluster_routes
 from api.routes import collector as collector_routes
 from api.routes import credentials as credential_routes
 from api.routes import dashboard as dashboard_routes
+from api.routes import device_templates as device_template_routes
 from api.routes import devices as device_routes
 from api.routes import export as export_routes
 from api.routes import racks as rack_routes
@@ -80,6 +81,7 @@ app.include_router(user_routes.router, prefix=settings.api_prefix)
 app.include_router(cluster_routes.router, prefix=settings.api_prefix)
 app.include_router(rack_routes.router, prefix=settings.api_prefix)
 app.include_router(device_routes.router, prefix=settings.api_prefix)
+app.include_router(device_template_routes.router, prefix=settings.api_prefix)
 app.include_router(credential_routes.router, prefix=settings.api_prefix)
 app.include_router(collector_routes.router, prefix=settings.api_prefix)
 app.include_router(export_routes.router, prefix=settings.api_prefix)

@@ -204,8 +204,13 @@ export function RackManagementPage() {
         searchPlaceholder="Search racks…"
         toolbar={
           <>
-            <Button variant="outline" onClick={() => setBulkOpen(true)} disabled={!clusterId}>
-              <Layers className="h-4 w-4" /> Bulk Create
+            <Button
+              variant="outline"
+              onClick={() => setBulkOpen(true)}
+              disabled={!clusterId}
+              title="Create several racks at once from a name prefix"
+            >
+              <Layers className="h-4 w-4" /> Create Multiple Racks
             </Button>
             <Button onClick={openCreate} disabled={!clusterId}>
               <Plus className="h-4 w-4" /> Create Rack
@@ -292,8 +297,8 @@ export function RackManagementPage() {
       <Dialog
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
-        title="Bulk Create Racks"
-        description="Creates <prefix>-1 … <prefix>-N. Existing names are skipped."
+        title="Create Multiple Racks"
+        description="Creates <prefix>-1 … <prefix>-N in one step. Existing names are skipped."
         footer={
           <>
             <Button variant="outline" onClick={() => setBulkOpen(false)}>

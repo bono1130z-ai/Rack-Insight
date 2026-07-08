@@ -46,7 +46,7 @@ class RackUnit(TimestampedModel):
     u_position: Mapped[int] = mapped_column(Integer, nullable=False)
     height: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     device_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid, ForeignKey("devices.id", ondelete="SET NULL"), nullable=True
+        Uuid, ForeignKey("rack_device_instances.id", ondelete="SET NULL"), nullable=True
     )
 
     rack: Mapped["Rack"] = relationship(back_populates="units", lazy="selectin")

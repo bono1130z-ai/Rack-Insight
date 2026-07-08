@@ -14,7 +14,10 @@ class Snapshot(TimestampedModel):
     __tablename__ = "snapshots"
 
     device_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid, ForeignKey("devices.id", ondelete="CASCADE"), nullable=False, index=True
+        Uuid,
+        ForeignKey("rack_device_instances.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
     )
     collected_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

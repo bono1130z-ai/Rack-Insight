@@ -4,6 +4,7 @@ from models.cluster import Cluster
 from models.collector_run import CollectorRun
 from models.credential import Credential, CredentialType
 from models.device import Device, DeviceOrientation, DeviceStatus, DeviceType
+from models.device_template import DeviceTemplate
 from models.inventory import (
     CPU,
     NIC,
@@ -31,6 +32,7 @@ __all__ = [
     "DeviceOrientation",
     "DeviceStatus",
     "DeviceType",
+    "DeviceTemplate",
     "CPU",
     "Memory",
     "NIC",
