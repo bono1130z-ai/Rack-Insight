@@ -1,5 +1,80 @@
 # Release Notes
 
+## 1.2.0 (2026-07-08) — Operational Automation & Discovery
+
+The first operational-automation milestone. Six additive features turn the
+inventory tool into a datacenter management platform. Fully backward
+compatible: no breaking API changes, the Device Template / Installed Device
+model and the Rack Editor are unchanged, and all 1.1.x features keep working.
+One additive migration (0008) adds two new tables.
+
+### F1 — SNMP Discovery
+
+- `POST /api/discovery/scan` walks standard SNMP system OIDs (sysDescr,
+  sysObjectID, sysName) across a set of targets (single IPs and/or CIDR blocks,
+  up to 1024 hosts) and stores each reachable host as a **PENDING**
+  `DiscoveredDevice`. Vendor and device type are inferred from sysDescr.
+- Discovery collects identification data only and **never creates Installed
+  Devices automatically**. `GET /api/discovery` lists pending discoveries;
+  `DELETE /api/discovery/{id}` ignores one.
+- SNMP support (pysnmp) is an optional dependency imported lazily: the platform
+  runs without it and the scan endpoint returns a clear 503 until it is
+  installed (it ships in the backend image).
+- New **SNMP Discovery** admin page: scan form, results table, ignore.
+
+### F2 — Discovery Import Wizard
+
+- `POST /api/discovery/import` creates Installed Devices from selected
+  discoveries, **reusing the existing bulk device-creation logic** (no
+  duplicated hardware or provisioning code). Hostname and management IP are
+  pre-filled (IP defaults to the discovered address) and editable before
+  confirming; imported discoveries are marked IMPORTED and linked to the new
+  device.
+
+### F3 — Initial Collection Workflow
+
+- After onboarding (Discovery import and the Provisioning wizard), an obvious
+  **Finish & Collect / Install & Collect** action runs the first inventory
+  collection immediately, reusing the existing per-device refresh. Collection
+  stays manual — no scheduled collection was added.
+
+### F4 — Inventory Drift Detection
+
+- `GET /api/devices/{id}/drift` compares a device's two most recent
+  **successful** snapshots and reports added / removed / changed hardware per
+  section — Firmware/BIOS, CPU, Memory, Storage, NIC, Network, and serial
+  numbers. A new **Drift** tab on Device Detail shows the differences.
+
+### F5 — Lifecycle Management
+
+- Admin-configurable retention per category (`collector_runs`, `snapshots`,
+  `discovery`) via `GET/PATCH /api/lifecycle/policies`, disabled by default.
+- `POST /api/lifecycle/cleanup` runs cleanup on demand; enabled policies are
+  also applied automatically by the existing background scheduler (no new
+  scheduler introduced). **Current inventory is always preserved** — the latest
+  snapshot per device is never deleted regardless of age.
+- New **Lifecycle & Retention** admin page.
+
+### F6 — Firmware Compliance
+
+- `GET /api/device-templates/{id}/compliance` compares firmware across every
+  device using a template, treats the most common version per component as the
+  baseline, and flags mismatches. A **Firmware Compliance** dialog on the
+  Device Templates page shows per-component, per-device status.
+
+### Schema
+
+- Migration 0008 (additive): `discovered_devices` and `retention_policies`
+  tables. No existing table changed. Retention rows are seeded (disabled) on
+  startup.
+
+### Upgrade notes
+
+- `docker compose` up/pull the 1.2.0 images. Migration 0008 runs automatically.
+- New optional Python dependency `pysnmp` (bundled in the backend image) enables
+  SNMP Discovery.
+- Default image tag is now `1.2.0`.
+
 ## 1.1.3 (2026-07-08)
 
 Final stabilization patch before 1.2.0. Correctness, consistency and

@@ -10,6 +10,7 @@ from config import get_settings
 from database import async_session_factory
 from models import Device, DeviceStatus
 from services.inventory_service import load_snapshot_inventory
+from services.lifecycle_service import run_cleanup
 from services.refresh_service import record_collector_run
 from utils.logging import get_logger
 
@@ -45,6 +46,11 @@ async def _collect_all_online() -> None:
                 logger.exception("Scheduled collection failed for %s", device.hostname)
 
 
+async def _run_retention_cleanup() -> None:
+    async with async_session_factory() as db:
+        await run_cleanup(db)
+
+
 async def _loop() -> None:
     settings = get_settings()
     while True:
@@ -53,6 +59,12 @@ async def _loop() -> None:
             await _collect_all_online()
         except Exception:
             logger.exception("Scheduler iteration failed")
+        try:
+            # Reuse the existing scheduler loop to apply enabled retention
+            # policies (F5). No new scheduler is introduced.
+            await _run_retention_cleanup()
+        except Exception:
+            logger.exception("Retention cleanup iteration failed")
 
 
 def start_scheduler() -> None:

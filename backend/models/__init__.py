@@ -5,6 +5,7 @@ from models.collector_run import CollectorRun
 from models.credential import Credential, CredentialType
 from models.device import Device, DeviceOrientation, DeviceStatus, DeviceType
 from models.device_template import DeviceTemplate
+from models.discovery import DiscoveredDevice, DiscoveryStatus
 from models.inventory import (
     CPU,
     NIC,
@@ -18,6 +19,7 @@ from models.inventory import (
     SwitchInventory,
 )
 from models.rack import Rack, RackUnit
+from models.retention import RetentionPolicy
 from models.snapshot import Snapshot
 from models.user import User, UserRole
 
@@ -48,4 +50,7 @@ __all__ = [
     "Snapshot",
     "User",
     "UserRole",
+    "DiscoveredDevice",
+    "DiscoveryStatus",
+    "RetentionPolicy",
 ]

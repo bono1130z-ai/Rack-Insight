@@ -43,10 +43,12 @@ from services.audit_service import (
     record_audit,
     snapshot_entity,
 )
+from services.drift_service import get_device_drift
 from services.health_service import compute_health
 from services.inventory_service import get_device_inventory, get_latest_snapshot
 from services.placement_service import validate_placement
 from services.refresh_service import refresh_device
+from schemas.drift import DriftReport
 from utils.crypto import encrypt_secret
 from utils.logging import get_logger
 
@@ -292,6 +294,23 @@ async def get_inventory(
         logger.exception("Inventory read failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Inventory read failed"
+        ) from exc
+
+
+@router.get("/{device_id}/drift", response_model=DriftReport)
+async def get_drift(
+    device_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> DriftReport:
+    """Hardware drift between the two most recent successful collections (F4)."""
+    try:
+        await _get_device(db, device_id)
+        return await get_device_drift(db, device_id)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Drift detection failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Drift detection failed"
         ) from exc
 
 

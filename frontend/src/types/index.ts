@@ -138,6 +138,80 @@ export interface DeviceSearchPage {
   page_size: number;
 }
 
+export type DiscoveryStatus = "PENDING" | "IMPORTED" | "IGNORED";
+
+export interface DiscoveredDevice {
+  id: string;
+  ip_address: string;
+  sysname: string | null;
+  sysdescr: string | null;
+  sysobjectid: string | null;
+  vendor: string | null;
+  device_type_guess: string | null;
+  serial: string | null;
+  status: DiscoveryStatus;
+  imported_device_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface DiscoveryScanResult {
+  scanned: number;
+  reachable: number;
+  discovered: DiscoveredDevice[];
+}
+
+export interface DriftChange {
+  section: string;
+  identifier: string;
+  change: "added" | "removed" | "changed";
+  field: string | null;
+  old_value: string | null;
+  new_value: string | null;
+}
+
+export interface DriftReport {
+  has_previous: boolean;
+  current_collected_at: string | null;
+  previous_collected_at: string | null;
+  changes: DriftChange[];
+}
+
+export interface DeviceComponentStatus {
+  device_id: string;
+  hostname: string;
+  version: string | null;
+  compliant: boolean;
+}
+
+export interface ComponentCompliance {
+  component: string;
+  expected_version: string | null;
+  compliant: boolean;
+  devices: DeviceComponentStatus[];
+}
+
+export interface TemplateComplianceReport {
+  template_id: string;
+  device_count: number;
+  compliant: boolean;
+  components: ComponentCompliance[];
+}
+
+export interface RetentionPolicy {
+  id: string;
+  category: string;
+  retention_days: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CleanupResult {
+  deleted: Record<string, number>;
+  total: number;
+}
+
 export interface AuditLogEntry {
   id: string;
   username: string;

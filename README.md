@@ -65,6 +65,24 @@ Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack 
   run collectors; `USER` has read-only access to all inventory views and sees
   no administration menus.
 
+### What's new in 1.2.0 — Operational Automation & Discovery
+
+- **SNMP Discovery** — scan IP ranges/CIDRs for SNMP-capable infrastructure;
+  discovered devices await approval and are never auto-installed
+  (`/api/discovery`).
+- **Discovery Import Wizard** — onboard discovered devices into a rack, reusing
+  the existing template + bulk-provisioning architecture, with an
+  **Install & Collect** step that runs the first collection immediately.
+- **Inventory Drift Detection** — a Drift tab comparing the two latest
+  successful collections (firmware/BIOS/CPU/memory/storage/NIC/serial).
+- **Firmware Compliance** — compare firmware across all devices sharing a
+  template and flag mismatches.
+- **Lifecycle & Retention** — admin-configurable retention for collector runs,
+  snapshot history and discovery cache, with automatic and on-demand cleanup;
+  current inventory is always preserved.
+
+See `docs/RELEASE_NOTES.md` for the full 1.2.0 notes.
+
 ### What's new in 1.1.3
 
 Stabilization patch. Highlights: deleting a device no longer strands its rack

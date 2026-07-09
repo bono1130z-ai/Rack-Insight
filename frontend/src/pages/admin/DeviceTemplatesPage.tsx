@@ -1,7 +1,9 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ColumnDef } from "@tanstack/react-table";
-import { Cpu, Pencil, Plus, Trash2 } from "lucide-react";
+import { CheckCircle2, Cpu, Pencil, Plus, ShieldCheck, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Table, TBody, TD, TH, THead, TR } from "@/components/ui/table";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DataTable } from "@/components/DataTable";
@@ -48,7 +50,14 @@ export function DeviceTemplatesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<DeviceTemplate | null>(null);
   const [deleting, setDeleting] = useState<DeviceTemplate | null>(null);
+  const [compliance, setCompliance] = useState<DeviceTemplate | null>(null);
   const [form, setForm] = useState<TemplateForm>(EMPTY);
+
+  const complianceQuery = useQuery({
+    queryKey: ["device-templates", compliance?.id, "compliance"],
+    queryFn: () => api.templateCompliance(compliance!.id),
+    enabled: compliance !== null,
+  });
 
   const invalidate = () =>
     void queryClient.invalidateQueries({ queryKey: ["device-templates"] });
@@ -126,6 +135,15 @@ export function DeviceTemplatesPage() {
         enableSorting: false,
         cell: ({ row }) => (
           <div className="flex justify-end gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              title="Firmware compliance"
+              disabled={row.original.instance_count === 0}
+              onClick={() => setCompliance(row.original)}
+            >
+              <ShieldCheck className="h-4 w-4 text-blue-500" />
+            </Button>
             <Button variant="ghost" size="icon" onClick={() => openEdit(row.original)}>
               <Pencil className="h-4 w-4 text-gray-500" />
             </Button>
@@ -257,6 +275,74 @@ export function DeviceTemplatesPage() {
             </Field>
           </div>
         </div>
+      </Dialog>
+
+      <Dialog
+        open={compliance !== null}
+        onClose={() => setCompliance(null)}
+        title={`Firmware Compliance — ${compliance?.name ?? ""}`}
+        description="Firmware versions across every device using this template. The most common version per component is treated as the baseline."
+        className="max-w-3xl"
+        footer={
+          <Button variant="outline" onClick={() => setCompliance(null)}>
+            Close
+          </Button>
+        }
+      >
+        {complianceQuery.isLoading || !complianceQuery.data ? (
+          <Skeleton className="h-40 w-full" />
+        ) : complianceQuery.data.components.length === 0 ? (
+          <p className="text-sm text-gray-500">
+            No firmware collected yet for this template's devices.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 text-sm">
+              {complianceQuery.data.compliant ? (
+                <Badge variant="success">
+                  <CheckCircle2 className="h-3 w-3" /> All compliant
+                </Badge>
+              ) : (
+                <Badge variant="warning">Mismatches found</Badge>
+              )}
+              <span className="text-gray-500">
+                {complianceQuery.data.device_count} device(s)
+              </span>
+            </div>
+            {complianceQuery.data.components.map((component) => (
+              <div key={component.component} className="rounded-md border border-gray-200 p-3">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="font-medium">{component.component}</span>
+                  <span className="text-xs text-gray-500">
+                    baseline: {component.expected_version ?? "-"}
+                  </span>
+                </div>
+                <Table>
+                  <THead>
+                    <TR>
+                      <TH>Device</TH>
+                      <TH>Version</TH>
+                      <TH>Status</TH>
+                    </TR>
+                  </THead>
+                  <TBody>
+                    {component.devices.map((d) => (
+                      <TR key={d.device_id}>
+                        <TD>{d.hostname}</TD>
+                        <TD className="font-mono text-xs">{d.version ?? "missing"}</TD>
+                        <TD>
+                          <Badge variant={d.compliant ? "success" : "warning"}>
+                            {d.compliant ? "OK" : "Mismatch"}
+                          </Badge>
+                        </TD>
+                      </TR>
+                    ))}
+                  </TBody>
+                </Table>
+              </div>
+            ))}
+          </div>
+        )}
       </Dialog>
 
       <ConfirmDialog

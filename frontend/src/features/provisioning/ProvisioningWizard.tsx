@@ -52,6 +52,7 @@ export function ProvisioningWizard({
   const [iloMode, setIloMode] = useState<IpMode>("manual");
   const [iloStart, setIloStart] = useState("");
   const [defaultCredentialId, setDefaultCredentialId] = useState("");
+  const [collectAfter, setCollectAfter] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
 
   const reset = () => {
@@ -128,6 +129,14 @@ export function ProvisioningWizard({
       toast.success(`${result.created.length} devices installed`, skipped || undefined);
       void queryClient.invalidateQueries({ queryKey: ["devices"] });
       void queryClient.invalidateQueries({ queryKey: ["rack", rackId, "layout"] });
+      // F3 — initial collection: fire-and-forget so the UI is not blocked.
+      // Progress is visible in Collector Management.
+      if (collectAfter && result.created.length > 0) {
+        toast.success("Initial collection started", `${result.created.length} device(s)`);
+        void Promise.allSettled(result.created.map((d) => api.refreshDevice(d.id))).then(
+          () => queryClient.invalidateQueries({ queryKey: ["collector"] }),
+        );
+      }
       onCreated();
       close();
     },
@@ -185,7 +194,9 @@ export function ProvisioningWizard({
             >
               {install.isPending
                 ? "Installing…"
-                : `Install ${validRows.length} Devices`}
+                : collectAfter
+                  ? `Install & Collect ${validRows.length}`
+                  : `Install ${validRows.length} Devices`}
               {!install.isPending && <ArrowRight className="h-4 w-4" />}
             </Button>
           </>
@@ -303,6 +314,14 @@ export function ProvisioningWizard({
               Duplicate iLO IP {dupIlo} — each address must be unique.
             </p>
           )}
+          <label className="flex items-center gap-2 text-sm text-gray-600">
+            <input
+              type="checkbox"
+              checked={collectAfter}
+              onChange={(e) => setCollectAfter(e.target.checked)}
+            />
+            Run initial inventory collection immediately after install
+          </label>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">

@@ -3,6 +3,7 @@ import {
   Activity,
   AlertTriangle,
   Cpu,
+  GitCompareArrows,
   HardDrive,
   Layers,
   MonitorPlay,
@@ -18,6 +19,7 @@ import { Breadcrumb } from "@/components/Breadcrumb";
 import { ExportMenu } from "@/components/ExportMenu";
 import { HealthBadge } from "@/components/HealthBadge";
 import { StatusBadge } from "@/components/StatusBadge";
+import { DriftTab } from "@/features/device/DriftTab";
 import { FirmwareTab } from "@/features/device/FirmwareTab";
 import { HardwareTab } from "@/features/device/HardwareTab";
 import { NetworkTab } from "@/features/device/NetworkTab";
@@ -42,6 +44,7 @@ const TABS = [
   { id: "storage", label: "Storage", Icon: HardDrive },
   { id: "vm", label: "Virtual Machine", Icon: MonitorPlay },
   { id: "sensor", label: "Sensor", Icon: Activity },
+  { id: "drift", label: "Drift", Icon: GitCompareArrows },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
@@ -178,6 +181,7 @@ export function DeviceDetailPage() {
                 {tab === "storage" && <StorageTab storages={inventory.storages} />}
                 {tab === "vm" && <VMTab vms={inventory.vms} />}
                 {tab === "sensor" && <SensorTab sensors={inventory.sensors} />}
+                {tab === "drift" && <DriftTab deviceId={deviceId} />}
               </motion.div>
             </AnimatePresence>
           )}

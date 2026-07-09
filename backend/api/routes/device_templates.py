@@ -9,12 +9,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from auth.dependencies import get_current_user, require_admin
 from database import get_db
 from models import Device, DeviceTemplate, User
+from schemas.compliance import TemplateComplianceReport
 from schemas.device_template import (
     DeviceTemplateCreate,
     DeviceTemplateResponse,
     DeviceTemplateSummary,
     DeviceTemplateUpdate,
 )
+from services.compliance_service import get_template_compliance
 from services.audit_service import (
     ACTION_CREATE,
     ACTION_DELETE,
@@ -68,6 +70,15 @@ async def get_template(
     template_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 ) -> DeviceTemplate:
     return await _get_template(db, template_id)
+
+
+@router.get("/{template_id}/compliance", response_model=TemplateComplianceReport)
+async def template_compliance(
+    template_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> TemplateComplianceReport:
+    """Firmware compliance across all devices using this template (F6)."""
+    await _get_template(db, template_id)
+    return await get_template_compliance(db, template_id)
 
 
 @router.post("", response_model=DeviceTemplateResponse, status_code=status.HTTP_201_CREATED)

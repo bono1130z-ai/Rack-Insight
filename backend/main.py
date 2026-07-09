@@ -12,6 +12,8 @@ from api.routes import clusters as cluster_routes
 from api.routes import collector as collector_routes
 from api.routes import credentials as credential_routes
 from api.routes import dashboard as dashboard_routes
+from api.routes import discovery as discovery_routes
+from api.routes import lifecycle as lifecycle_routes
 from api.routes import device_templates as device_template_routes
 from api.routes import devices as device_routes
 from api.routes import export as export_routes
@@ -24,6 +26,7 @@ from database import async_session_factory, engine
 from database.migrations import run_migrations
 from models import User, UserRole
 from scheduler.background import start_scheduler, stop_scheduler
+from services.lifecycle_service import ensure_default_policies
 from utils.logging import configure_logging, get_logger
 
 settings = get_settings()
@@ -53,6 +56,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # so model changes always require a migration — see alembic/versions/.
     await run_migrations()
     await _bootstrap_admin()
+    async with async_session_factory() as db:
+        await ensure_default_policies(db)
     start_scheduler()
     logger.info("%s v%s started", settings.app_name, settings.app_version)
     yield
@@ -87,6 +92,8 @@ app.include_router(collector_routes.router, prefix=settings.api_prefix)
 app.include_router(export_routes.router, prefix=settings.api_prefix)
 app.include_router(dashboard_routes.router, prefix=settings.api_prefix)
 app.include_router(audit_routes.router, prefix=settings.api_prefix)
+app.include_router(discovery_routes.router, prefix=settings.api_prefix)
+app.include_router(lifecycle_routes.router, prefix=settings.api_prefix)
 
 
 @app.get("/api/health", tags=["system"])

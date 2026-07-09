@@ -7,6 +7,8 @@ import { CollectorManagementPage } from "@/pages/admin/CollectorManagementPage";
 import { CredentialManagementPage } from "@/pages/admin/CredentialManagementPage";
 import { DeviceManagementPage } from "@/pages/admin/DeviceManagementPage";
 import { DeviceTemplatesPage } from "@/pages/admin/DeviceTemplatesPage";
+import { DiscoveryPage } from "@/pages/admin/DiscoveryPage";
+import { LifecyclePage } from "@/pages/admin/LifecyclePage";
 import { RackEditorPage } from "@/pages/admin/RackEditorPage";
 import { RackManagementPage } from "@/pages/admin/RackManagementPage";
 import { UserManagementPage } from "@/pages/admin/UserManagementPage";
@@ -103,6 +105,22 @@ export default function App() {
               element={
                 <AdminRoute>
                   <CollectorManagementPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/discovery"
+              element={
+                <AdminRoute>
+                  <DiscoveryPage />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/lifecycle"
+              element={
+                <AdminRoute>
+                  <LifecyclePage />
                 </AdminRoute>
               }
             />

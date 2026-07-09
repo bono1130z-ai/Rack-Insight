@@ -6,6 +6,8 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  Radar,
+  Recycle,
   ScrollText,
   Search,
   Server,
@@ -24,7 +26,9 @@ const ADMIN_MENU = [
   { to: "/admin/devices", label: "Installed Devices", Icon: HardDrive },
   { to: "/admin/users", label: "User Management", Icon: UserCog },
   { to: "/admin/credentials", label: "Credential Management", Icon: KeyRound },
+  { to: "/admin/discovery", label: "SNMP Discovery", Icon: Radar },
   { to: "/admin/collectors", label: "Collector Management", Icon: Activity },
+  { to: "/admin/lifecycle", label: "Lifecycle & Retention", Icon: Recycle },
   { to: "/admin/audit", label: "Audit Log", Icon: ScrollText },
 ];
 

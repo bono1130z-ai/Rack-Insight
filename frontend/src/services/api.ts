@@ -2,7 +2,13 @@ import { useAuthStore } from "@/stores/auth";
 import type {
   AuditLogPage,
   BulkDeviceResult,
+  CleanupResult,
   ClusterSummary,
+  DiscoveredDevice,
+  DiscoveryScanResult,
+  DriftReport,
+  RetentionPolicy,
+  TemplateComplianceReport,
   CollectorDeviceStatus,
   DashboardSummary,
   CollectorRun,
@@ -163,6 +169,33 @@ export const api = {
     }),
   unassignDevice: (deviceId: string) =>
     request<void>(`/devices/${deviceId}/position`, { method: "DELETE" }),
+
+  deviceDrift: (deviceId: string) => request<DriftReport>(`/devices/${deviceId}/drift`),
+
+  discoveries: () => request<DiscoveredDevice[]>("/discovery"),
+  discoveryScan: (payload: { targets: string[]; community: string; timeout?: number }) =>
+    request<DiscoveryScanResult>("/discovery/scan", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  discoveryImport: (payload: Record<string, unknown>) =>
+    request<BulkDeviceResult>("/discovery/import", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  ignoreDiscovery: (id: string) =>
+    request<void>(`/discovery/${id}`, { method: "DELETE" }),
+
+  retentionPolicies: () => request<RetentionPolicy[]>("/lifecycle/policies"),
+  updateRetentionPolicy: (category: string, payload: Record<string, unknown>) =>
+    request<RetentionPolicy>(`/lifecycle/policies/${category}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  runCleanup: () => request<CleanupResult>("/lifecycle/cleanup", { method: "POST" }),
+
+  templateCompliance: (templateId: string) =>
+    request<TemplateComplianceReport>(`/device-templates/${templateId}/compliance`),
 
   deviceTemplates: () => request<DeviceTemplate[]>("/device-templates"),
   createDeviceTemplate: (payload: Record<string, unknown>) =>
