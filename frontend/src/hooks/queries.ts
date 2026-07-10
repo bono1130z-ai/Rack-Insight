@@ -76,12 +76,16 @@ export function useRoles() {
   return useQuery({ queryKey: ["roles"], queryFn: api.roles });
 }
 
-export function useUserGroups() {
-  return useQuery({ queryKey: ["user-groups"], queryFn: api.userGroups });
+export function useRole(roleId: string) {
+  return useQuery({
+    queryKey: ["role", roleId],
+    queryFn: () => api.role(roleId),
+    enabled: Boolean(roleId),
+  });
 }
 
-export function useRoleBindings() {
-  return useQuery({ queryKey: ["role-bindings"], queryFn: api.roleBindings });
+export function useUserGroups() {
+  return useQuery({ queryKey: ["user-groups"], queryFn: api.userGroups });
 }
 
 export function useCredentials() {

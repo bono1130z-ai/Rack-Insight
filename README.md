@@ -83,6 +83,24 @@ Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack 
 
 See `docs/RELEASE_NOTES.md` for the full 1.2.1 notes.
 
+### What's new in 1.2.2 — Administration UX & Navigation
+
+- **Grouped, collapsible sidebar** — Dashboard, Inventory, Operations,
+  Administration and Access Management sections; expand/collapse state is
+  remembered. Menus stay permission-driven and administration pages open
+  directly (no drill-down). The Dashboard's operational
+  Cluster → Rack → Device flow is unchanged.
+- **User Group editor manages roles** — assign roles, members and group info in
+  one dialog; the standalone Role Bindings page is gone (the table and APIs
+  remain).
+- **Role Details page** — click a role to see its permissions, bound user
+  groups and effective user count. System roles stay read-only.
+- **Permissions** are surfaced only inside the Role editor / Role Details
+  (standalone page removed). No backend/RBAC changes; fully compatible with
+  1.2.1.
+
+See `docs/RELEASE_NOTES.md` for the full 1.2.2 notes.
+
 ### What's new in 1.2.0 — Operational Automation & Discovery
 
 - **SNMP Discovery** — scan IP ranges/CIDRs for SNMP-capable infrastructure;
@@ -174,8 +192,9 @@ complete the entire initial setup from the web UI (no CLI / Swagger needed):
   (Redfish / SSH / Cisco) and stored-credential selection. Devices can be
   repositioned by U selection or by drag & drop on the 42U rack view.
 - **Access Management (RBAC)** — Users (display name / email / status / group
-  membership), User Groups, Roles (Administrator / Operator / Viewer + custom),
-  Role Bindings, and a read-only Permissions catalog. Menus and actions are
+  membership), User Groups (members **and** role assignment in one editor),
+  and Roles (Administrator / Operator / Viewer + custom) with a Role Details
+  page. Permissions are managed inside the Role editor. Menus and actions are
   permission-driven.
 - **Credential Management** — named Redfish / SSH / SNMP credentials,
   encrypted at rest and never displayed after saving.

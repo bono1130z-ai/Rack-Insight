@@ -7,7 +7,7 @@ the authorization model or lock the last administrator out.
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from auth.dependencies import RequirePermission
@@ -22,11 +22,14 @@ from models import (
     UserGroupMember,
 )
 from rbac_catalog import ADMIN_GROUP_NAME, ADMIN_ROLE_NAME
+from models.rbac import SCOPE_GLOBAL
 from schemas.rbac import (
     PermissionResponse,
     RoleBindingCreate,
     RoleBindingResponse,
     RoleCreate,
+    RoleDetailResponse,
+    RoleGroupRef,
     RoleResponse,
     RoleUpdate,
     UserGroupCreate,
@@ -108,6 +111,52 @@ async def _resolve_permissions(
 async def list_roles(db: AsyncSession = Depends(get_db)) -> list[RoleResponse]:
     roles = (await db.execute(select(Role).order_by(Role.name))).scalars().all()
     return [await _serialize_role(db, r) for r in roles]
+
+
+@router.get(
+    "/roles/{role_id}",
+    response_model=RoleDetailResponse,
+    dependencies=[Depends(RequirePermission("role.view"))],
+)
+async def get_role(
+    role_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> RoleDetailResponse:
+    """Role plus the groups bound to it and how many users inherit it — powers
+    the Role Details page (no extra round-trips or separate bindings page)."""
+    role = (await db.execute(select(Role).where(Role.id == role_id))).scalar_one_or_none()
+    if role is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Role not found")
+
+    groups = (
+        await db.execute(
+            select(UserGroup.id, UserGroup.name)
+            .join(RoleBinding, RoleBinding.user_group_id == UserGroup.id)
+            .where(RoleBinding.role_id == role_id, RoleBinding.scope_type == SCOPE_GLOBAL)
+            .order_by(UserGroup.name)
+        )
+    ).all()
+    group_ids = [row.id for row in groups]
+    effective_users = 0
+    if group_ids:
+        effective_users = (
+            await db.execute(
+                select(func.count(func.distinct(UserGroupMember.user_id))).where(
+                    UserGroupMember.user_group_id.in_(group_ids)
+                )
+            )
+        ).scalar_one()
+
+    return RoleDetailResponse(
+        id=role.id,
+        name=role.name,
+        description=role.description,
+        is_system=role.is_system,
+        permission_codes=await _role_permission_codes(db, role.id),
+        created_at=role.created_at,
+        updated_at=role.updated_at,
+        user_groups=[RoleGroupRef(id=row.id, name=row.name) for row in groups],
+        effective_user_count=effective_users,
+    )
 
 
 @router.post("/roles", response_model=RoleResponse, status_code=status.HTTP_201_CREATED)
@@ -211,16 +260,17 @@ async def _serialize_group(db: AsyncSession, group: UserGroup) -> UserGroupRespo
             )
         ).scalars().all()
     )
-    role_names = list(
-        (
-            await db.execute(
-                select(Role.name)
-                .join(RoleBinding, RoleBinding.role_id == Role.id)
-                .where(RoleBinding.user_group_id == group.id)
-                .order_by(Role.name)
+    bound_roles = (
+        await db.execute(
+            select(Role.id, Role.name)
+            .join(RoleBinding, RoleBinding.role_id == Role.id)
+            .where(
+                RoleBinding.user_group_id == group.id,
+                RoleBinding.scope_type == SCOPE_GLOBAL,
             )
-        ).scalars().all()
-    )
+            .order_by(Role.name)
+        )
+    ).all()
     return UserGroupResponse(
         id=group.id,
         name=group.name,
@@ -228,10 +278,60 @@ async def _serialize_group(db: AsyncSession, group: UserGroup) -> UserGroupRespo
         is_system=group.is_system,
         member_ids=member_ids,
         member_count=len(member_ids),
-        role_names=role_names,
+        role_ids=[row.id for row in bound_roles],
+        role_names=[row.name for row in bound_roles],
         created_at=group.created_at,
         updated_at=group.updated_at,
     )
+
+
+async def _validate_roles(db: AsyncSession, role_ids: list[uuid.UUID]) -> None:
+    if not role_ids:
+        return
+    found = await db.execute(select(Role.id).where(Role.id.in_(role_ids)))
+    if set(found.scalars().all()) != set(role_ids):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unknown role id")
+
+
+async def _set_group_roles(
+    db: AsyncSession, group: UserGroup, role_ids: list[uuid.UUID]
+) -> None:
+    """Sync a group's GLOBAL-scope role bindings to exactly ``role_ids``.
+
+    This is the group-editor path onto the existing role_bindings table (the
+    table and its API are unchanged). The built-in Administrator binding is
+    never removed, so administrators cannot lock themselves out.
+    """
+    current = {
+        b.role_id: b
+        for b in (
+            await db.execute(
+                select(RoleBinding).where(
+                    RoleBinding.user_group_id == group.id,
+                    RoleBinding.scope_type == SCOPE_GLOBAL,
+                )
+            )
+        ).scalars().all()
+    }
+    wanted = set(role_ids)
+
+    admin_role_id = (
+        await db.execute(select(Role.id).where(Role.name == ADMIN_ROLE_NAME))
+    ).scalar_one_or_none()
+    protected = group.name == ADMIN_GROUP_NAME and admin_role_id is not None
+
+    for role_id in wanted - set(current):
+        db.add(
+            RoleBinding(
+                user_group_id=group.id, role_id=role_id, scope_type=SCOPE_GLOBAL
+            )
+        )
+    for role_id, binding in current.items():
+        if role_id in wanted:
+            continue
+        if protected and role_id == admin_role_id:
+            continue  # lockout guard: keep Administrators bound to Administrator
+        await db.delete(binding)
 
 
 async def _validate_users(db: AsyncSession, user_ids: list[uuid.UUID]) -> None:
@@ -290,10 +390,12 @@ async def create_user_group(
     if existing.scalar_one_or_none() is not None:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group name already exists")
     await _validate_users(db, payload.member_ids)
+    await _validate_roles(db, payload.role_ids)
     group = UserGroup(name=payload.name, description=payload.description, is_system=False)
     db.add(group)
     await db.flush()
     await _set_group_members(db, group.id, payload.member_ids)
+    await _set_group_roles(db, group, payload.role_ids)
     record_audit(db, actor, ACTION_CREATE, "user_group", group.name, group.id)
     await db.commit()
     await db.refresh(group)
@@ -330,6 +432,9 @@ async def update_user_group(
     if payload.member_ids is not None:
         await _validate_users(db, payload.member_ids)
         await _set_group_members(db, group.id, payload.member_ids)
+    if payload.role_ids is not None:
+        await _validate_roles(db, payload.role_ids)
+        await _set_group_roles(db, group, payload.role_ids)
     record_audit(db, actor, ACTION_UPDATE, "user_group", group.name, group.id)
     await db.commit()
     await db.refresh(group)

@@ -1,5 +1,64 @@
 # Release Notes
 
+## 1.2.2 (2026-07-10) — Administration UX & Navigation
+
+A UX and navigation release that simplifies administration for large
+datacenter environments. No backend architecture, authentication or RBAC logic
+changes — existing APIs are reused, the `role_bindings` table is preserved, and
+everything is backward compatible with 1.2.1. Two small additive API extensions
+support the new UI (no migration required).
+
+### Sidebar — grouped, collapsible navigation
+
+- The left navigation is now grouped into **collapsible sections**: Dashboard
+  (+ Inventory Search) at the top, then **Inventory** (Clusters, Racks,
+  Devices, Device Templates), **Operations** (Discovery, Collector, Lifecycle),
+  **Administration** (Credentials), and **Access Management** (Users, User
+  Groups, Roles, Audit Log).
+- Expanded/collapsed state is **remembered** (persisted in `localStorage`).
+- Sections only appear when the user has permission for at least one item, so
+  the menu stays compact and permission-driven.
+- Administration pages open **directly** from the Inventory section — no
+  hierarchical drill-down. The Dashboard keeps its operational
+  Cluster → Rack → Device browse flow, unchanged.
+
+### Role Bindings folded into the User Group editor
+
+- The standalone **Role Bindings** page is **removed** from the UI; role
+  bindings are no longer exposed as a separate concept. (The `role_bindings`
+  table and its `/api/role-bindings` endpoints are unchanged.)
+- Editing a **User Group** now manages group info, **members**, and **assigned
+  roles** in a single dialog. Saving updates the role_bindings table internally
+  via `role_ids` on `POST/PATCH /api/user-groups`. The built-in Administrator
+  binding is still protected from removal.
+
+### Role Details page
+
+- Clicking a role opens a dedicated **Role Details** page
+  (`GET /api/roles/{id}`) showing name, description, a System Role indicator,
+  assigned permissions (grouped), assigned user groups, and the **effective
+  user count**. System roles remain read-only; custom roles are editable in
+  place.
+
+### Permissions
+
+- The standalone **Permissions** page is **removed** from navigation.
+  Permissions now appear only inside the Role editor and Role Details. They
+  remain system-managed (the `/api/permissions` catalog endpoint is unchanged).
+
+### Refactoring
+
+- Extracted reusable UI: `CheckboxList`, `PermissionPicker`, and a shared
+  `RoleEditorDialog` (used by both role creation and editing) to remove
+  duplication across the Access Management pages.
+
+### API additions (additive, no migration)
+
+- `user_groups` create/update accept `role_ids` and the response includes
+  `role_ids`; saving syncs the group's GLOBAL role bindings.
+- `GET /api/roles/{id}` returns role detail with bound user groups and the
+  effective user count.
+
 ## 1.2.1 (2026-07-10) — Access Management (RBAC)
 
 Replaces the standalone User Management page with a full Role-Based Access

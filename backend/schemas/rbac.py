@@ -44,17 +44,31 @@ class RoleResponse(BaseModel):
     updated_at: datetime
 
 
+class RoleGroupRef(BaseModel):
+    id: uuid.UUID
+    name: str
+
+
+class RoleDetailResponse(RoleResponse):
+    """Role plus the groups it is bound to and how many users inherit it."""
+
+    user_groups: list[RoleGroupRef]
+    effective_user_count: int
+
+
 # --- User groups ------------------------------------------------------------
 class UserGroupCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
     description: str | None = Field(default=None, max_length=2000)
     member_ids: list[uuid.UUID] = Field(default_factory=list)
+    role_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 class UserGroupUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=64)
     description: str | None = Field(default=None, max_length=2000)
     member_ids: list[uuid.UUID] | None = None
+    role_ids: list[uuid.UUID] | None = None
 
 
 class UserGroupResponse(BaseModel):
@@ -64,6 +78,7 @@ class UserGroupResponse(BaseModel):
     is_system: bool
     member_ids: list[uuid.UUID]
     member_count: int
+    role_ids: list[uuid.UUID]
     role_names: list[str]
     created_at: datetime
     updated_at: datetime

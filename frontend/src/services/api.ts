@@ -24,6 +24,7 @@ import type {
   RackSummary,
   Role,
   RoleBinding,
+  RoleDetail,
   TokenPair,
   User,
   UserGroup,
@@ -275,6 +276,7 @@ export const api = {
   permissions: () => request<Permission[]>("/permissions"),
 
   roles: () => request<Role[]>("/roles"),
+  role: (id: string) => request<RoleDetail>(`/roles/${id}`),
   createRole: (payload: Record<string, unknown>) =>
     request<Role>("/roles", { method: "POST", body: JSON.stringify(payload) }),
   updateRole: (id: string, payload: Record<string, unknown>) =>

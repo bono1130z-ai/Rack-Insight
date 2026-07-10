@@ -1,12 +1,11 @@
 import {
   Activity,
   Boxes,
+  ChevronDown,
   Cpu,
   HardDrive,
   KeyRound,
-  KeySquare,
   LayoutDashboard,
-  Link2,
   LogOut,
   Radar,
   Recycle,
@@ -15,10 +14,13 @@ import {
   Server,
   Settings,
   ShieldCheck,
+  UserCog,
   Users,
   UsersRound,
+  Wrench,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { useState } from "react";
 import { Link, Navigate, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Toaster } from "@/components/Toaster";
 import { Button } from "@/components/ui/button";
@@ -31,30 +33,71 @@ interface MenuItem {
   permission: string;
 }
 
+interface MenuSection {
+  key: string;
+  label: string;
+  Icon: LucideIcon;
+  items: MenuItem[];
+}
+
 const TOP_MENU: MenuItem[] = [
   { to: "/", label: "Dashboard", Icon: LayoutDashboard, permission: "dashboard.view" },
   { to: "/search", label: "Inventory Search", Icon: Search, permission: "inventory.view" },
 ];
 
-const ADMIN_MENU: MenuItem[] = [
-  { to: "/admin/clusters", label: "Cluster Management", Icon: Boxes, permission: "cluster.view" },
-  { to: "/admin/racks", label: "Rack Management", Icon: Server, permission: "rack.view" },
-  { to: "/admin/device-templates", label: "Device Templates", Icon: Cpu, permission: "template.view" },
-  { to: "/admin/devices", label: "Installed Devices", Icon: HardDrive, permission: "device.view" },
-  { to: "/admin/credentials", label: "Credential Management", Icon: KeyRound, permission: "credential.view" },
-  { to: "/admin/discovery", label: "SNMP Discovery", Icon: Radar, permission: "discovery.view" },
-  { to: "/admin/collectors", label: "Collector Management", Icon: Activity, permission: "collector.view" },
-  { to: "/admin/lifecycle", label: "Lifecycle & Retention", Icon: Recycle, permission: "lifecycle.view" },
-  { to: "/admin/audit", label: "Audit Log", Icon: ScrollText, permission: "audit.view" },
+const SECTIONS: MenuSection[] = [
+  {
+    key: "inventory",
+    label: "Inventory",
+    Icon: Boxes,
+    items: [
+      { to: "/admin/clusters", label: "Clusters", Icon: Boxes, permission: "cluster.view" },
+      { to: "/admin/racks", label: "Racks", Icon: Server, permission: "rack.view" },
+      { to: "/admin/devices", label: "Devices", Icon: HardDrive, permission: "device.view" },
+      { to: "/admin/device-templates", label: "Device Templates", Icon: Cpu, permission: "template.view" },
+    ],
+  },
+  {
+    key: "operations",
+    label: "Operations",
+    Icon: Wrench,
+    items: [
+      { to: "/admin/discovery", label: "Discovery", Icon: Radar, permission: "discovery.view" },
+      { to: "/admin/collectors", label: "Collector", Icon: Activity, permission: "collector.view" },
+      { to: "/admin/lifecycle", label: "Lifecycle", Icon: Recycle, permission: "lifecycle.view" },
+    ],
+  },
+  {
+    key: "administration",
+    label: "Administration",
+    Icon: Settings,
+    items: [
+      { to: "/admin/credentials", label: "Credentials", Icon: KeyRound, permission: "credential.view" },
+    ],
+  },
+  {
+    key: "access",
+    label: "Access Management",
+    Icon: ShieldCheck,
+    items: [
+      { to: "/admin/users", label: "Users", Icon: UserCog, permission: "user.view" },
+      { to: "/admin/user-groups", label: "User Groups", Icon: UsersRound, permission: "group.view" },
+      { to: "/admin/roles", label: "Roles", Icon: Users, permission: "role.view" },
+      { to: "/admin/audit", label: "Audit Log", Icon: ScrollText, permission: "audit.view" },
+    ],
+  },
 ];
 
-const ACCESS_MENU: MenuItem[] = [
-  { to: "/admin/users", label: "Users", Icon: Users, permission: "user.view" },
-  { to: "/admin/user-groups", label: "User Groups", Icon: UsersRound, permission: "group.view" },
-  { to: "/admin/roles", label: "Roles", Icon: ShieldCheck, permission: "role.view" },
-  { to: "/admin/role-bindings", label: "Role Bindings", Icon: Link2, permission: "binding.view" },
-  { to: "/admin/permissions", label: "Permissions", Icon: KeySquare, permission: "permission.view" },
-];
+const COLLAPSE_STORAGE_KEY = "rack-insight-sidebar-sections";
+
+function loadCollapsed(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(COLLAPSE_STORAGE_KEY);
+    return raw ? (JSON.parse(raw) as Record<string, boolean>) : {};
+  } catch {
+    return {};
+  }
+}
 
 function SidebarLink({ to, label, Icon }: { to: string; label: string; Icon: LucideIcon }) {
   return (
@@ -75,38 +118,29 @@ function SidebarLink({ to, label, Icon }: { to: string; label: string; Icon: Luc
   );
 }
 
-function MenuSection({
-  label,
-  Icon,
-  items,
-}: {
-  label: string;
-  Icon: LucideIcon;
-  items: MenuItem[];
-}) {
-  if (items.length === 0) return null;
-  return (
-    <>
-      <p className="mt-4 flex items-center gap-1.5 px-3 pb-1 text-xs font-semibold uppercase tracking-wide text-gray-400">
-        <Icon className="h-3.5 w-3.5" /> {label}
-      </p>
-      {items.map((item) => (
-        <SidebarLink key={item.to} to={item.to} label={item.label} Icon={item.Icon} />
-      ))}
-    </>
-  );
-}
-
 export function AppLayout() {
   const { accessToken, user, logout, hasPermission } = useAuthStore();
   const navigate = useNavigate();
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>(loadCollapsed);
 
   if (!accessToken) return <Navigate to="/login" replace />;
 
-  const visible = (items: MenuItem[]) => items.filter((i) => hasPermission(i.permission));
-  const topItems = visible(TOP_MENU);
-  const adminItems = visible(ADMIN_MENU);
-  const accessItems = visible(ACCESS_MENU);
+  const toggleSection = (key: string) =>
+    setCollapsed((prev) => {
+      const next = { ...prev, [key]: !prev[key] };
+      try {
+        localStorage.setItem(COLLAPSE_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // ignore storage failures (private mode, quota)
+      }
+      return next;
+    });
+
+  const topItems = TOP_MENU.filter((i) => hasPermission(i.permission));
+  const sections = SECTIONS.map((section) => ({
+    ...section,
+    items: section.items.filter((i) => hasPermission(i.permission)),
+  })).filter((section) => section.items.length > 0);
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -146,8 +180,40 @@ export function AppLayout() {
             {topItems.map((item) => (
               <SidebarLink key={item.to} to={item.to} label={item.label} Icon={item.Icon} />
             ))}
-            <MenuSection label="Administration" Icon={Settings} items={adminItems} />
-            <MenuSection label="Access Management" Icon={ShieldCheck} items={accessItems} />
+
+            {sections.map((section) => {
+              const isCollapsed = collapsed[section.key] ?? false;
+              return (
+                <div key={section.key} className="mt-3">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section.key)}
+                    className="flex w-full items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold uppercase tracking-wide text-gray-400 hover:bg-gray-50"
+                    aria-expanded={!isCollapsed}
+                  >
+                    <section.Icon className="h-3.5 w-3.5" />
+                    <span className="flex-1 text-left">{section.label}</span>
+                    <ChevronDown
+                      className={`h-3.5 w-3.5 transition-transform ${
+                        isCollapsed ? "-rotate-90" : ""
+                      }`}
+                    />
+                  </button>
+                  {!isCollapsed && (
+                    <div className="mt-1 flex flex-col gap-1">
+                      {section.items.map((item) => (
+                        <SidebarLink
+                          key={item.to}
+                          to={item.to}
+                          label={item.label}
+                          Icon={item.Icon}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </nav>
         </aside>
 

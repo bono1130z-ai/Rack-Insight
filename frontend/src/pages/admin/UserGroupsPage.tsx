@@ -3,6 +3,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { Lock, Pencil, Plus, Trash2, UsersRound } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Breadcrumb } from "@/components/Breadcrumb";
+import { CheckboxList } from "@/components/CheckboxList";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DataTable } from "@/components/DataTable";
 import { EmptyState } from "@/components/EmptyState";
@@ -12,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Field } from "@/components/ui/label";
-import { useUserGroups, useUsers } from "@/hooks/queries";
+import { useRoles, useUserGroups, useUsers } from "@/hooks/queries";
 import { api, ApiError } from "@/services/api";
 import { toast } from "@/stores/toast";
 import type { UserGroup } from "@/types";
@@ -21,13 +22,15 @@ interface GroupForm {
   name: string;
   description: string;
   member_ids: string[];
+  role_ids: string[];
 }
 
-const EMPTY_FORM: GroupForm = { name: "", description: "", member_ids: [] };
+const EMPTY_FORM: GroupForm = { name: "", description: "", member_ids: [], role_ids: [] };
 
 export function UserGroupsPage() {
   const { data: groups, isLoading } = useUserGroups();
   const { data: users } = useUsers();
+  const { data: roles } = useRoles();
   const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<UserGroup | null>(null);
@@ -37,6 +40,8 @@ export function UserGroupsPage() {
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ["user-groups"] });
     void queryClient.invalidateQueries({ queryKey: ["users"] });
+    void queryClient.invalidateQueries({ queryKey: ["roles"] });
+    void queryClient.invalidateQueries({ queryKey: ["role"] });
   };
 
   const openCreate = () => {
@@ -51,16 +56,15 @@ export function UserGroupsPage() {
       name: group.name,
       description: group.description ?? "",
       member_ids: group.member_ids,
+      role_ids: group.role_ids,
     });
     setDialogOpen(true);
   };
 
-  const toggleMember = (id: string) =>
+  const toggle = (key: "member_ids" | "role_ids", id: string) =>
     setForm((f) => ({
       ...f,
-      member_ids: f.member_ids.includes(id)
-        ? f.member_ids.filter((m) => m !== id)
-        : [...f.member_ids, id],
+      [key]: f[key].includes(id) ? f[key].filter((x) => x !== id) : [...f[key], id],
     }));
 
   const save = useMutation({
@@ -68,6 +72,7 @@ export function UserGroupsPage() {
       const payload: Record<string, unknown> = {
         description: form.description || null,
         member_ids: form.member_ids,
+        role_ids: form.role_ids,
       };
       // A system group's name cannot change; only send name for custom groups.
       if (!editing?.is_system) payload.name = form.name;
@@ -161,6 +166,20 @@ export function UserGroupsPage() {
     [],
   );
 
+  const memberOptions = useMemo(
+    () =>
+      (users ?? []).map((u) => ({
+        value: u.id,
+        label: u.display_name ? `${u.display_name} (${u.username})` : u.username,
+      })),
+    [users],
+  );
+
+  const roleOptions = useMemo(
+    () => (roles ?? []).map((r) => ({ value: r.id, label: r.name, hint: r.description ?? undefined })),
+    [roles],
+  );
+
   return (
     <div className="flex flex-col gap-4">
       <Breadcrumb crumbs={[{ label: "Access Management" }, { label: "User Groups" }]} />
@@ -181,7 +200,7 @@ export function UserGroupsPage() {
           <EmptyState
             Icon={UsersRound}
             title="No user groups"
-            description="Groups collect users and receive roles through role bindings."
+            description="Groups collect users and grant them roles. Create one to get started."
           />
         }
       />
@@ -190,6 +209,7 @@ export function UserGroupsPage() {
         open={dialogOpen}
         onClose={() => setDialogOpen(false)}
         title={editing ? `Edit Group — ${editing.name}` : "Create User Group"}
+        className="max-w-2xl"
         footer={
           <>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>
@@ -216,23 +236,24 @@ export function UserGroupsPage() {
               onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
           </Field>
-          <Field label={`Members (${form.member_ids.length} selected)`}>
-            <div className="flex max-h-64 flex-col gap-1 overflow-y-auto rounded-md border border-gray-200 p-2">
-              {(users ?? []).map((u) => (
-                <label key={u.id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={form.member_ids.includes(u.id)}
-                    onChange={() => toggleMember(u.id)}
-                  />
-                  {u.display_name ? `${u.display_name} (${u.username})` : u.username}
-                </label>
-              ))}
-              {(users ?? []).length === 0 && (
-                <span className="text-sm text-gray-400">No users available.</span>
-              )}
-            </div>
-          </Field>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <Field label={`Roles (${form.role_ids.length} selected)`}>
+              <CheckboxList
+                options={roleOptions}
+                selected={form.role_ids}
+                onToggle={(id) => toggle("role_ids", id)}
+                emptyText="No roles defined."
+              />
+            </Field>
+            <Field label={`Members (${form.member_ids.length} selected)`}>
+              <CheckboxList
+                options={memberOptions}
+                selected={form.member_ids}
+                onToggle={(id) => toggle("member_ids", id)}
+                emptyText="No users available."
+              />
+            </Field>
+          </div>
         </div>
       </Dialog>
 

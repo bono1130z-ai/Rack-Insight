@@ -10,10 +10,9 @@ import { DeviceManagementPage } from "@/pages/admin/DeviceManagementPage";
 import { DeviceTemplatesPage } from "@/pages/admin/DeviceTemplatesPage";
 import { DiscoveryPage } from "@/pages/admin/DiscoveryPage";
 import { LifecyclePage } from "@/pages/admin/LifecyclePage";
-import { PermissionsPage } from "@/pages/admin/PermissionsPage";
 import { RackEditorPage } from "@/pages/admin/RackEditorPage";
 import { RackManagementPage } from "@/pages/admin/RackManagementPage";
-import { RoleBindingsPage } from "@/pages/admin/RoleBindingsPage";
+import { RoleDetailsPage } from "@/pages/admin/RoleDetailsPage";
 import { RolesPage } from "@/pages/admin/RolesPage";
 import { UserGroupsPage } from "@/pages/admin/UserGroupsPage";
 import { UserManagementPage } from "@/pages/admin/UserManagementPage";
@@ -147,18 +146,10 @@ export default function App() {
               }
             />
             <Route
-              path="/admin/role-bindings"
+              path="/admin/roles/:roleId"
               element={
-                <RequirePermission permission="binding.view">
-                  <RoleBindingsPage />
-                </RequirePermission>
-              }
-            />
-            <Route
-              path="/admin/permissions"
-              element={
-                <RequirePermission permission="permission.view">
-                  <PermissionsPage />
+                <RequirePermission permission="role.view">
+                  <RoleDetailsPage />
                 </RequirePermission>
               }
             />

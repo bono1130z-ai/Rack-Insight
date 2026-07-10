@@ -64,9 +64,20 @@ export interface UserGroup {
   is_system: boolean;
   member_ids: string[];
   member_count: number;
+  role_ids: string[];
   role_names: string[];
   created_at: string;
   updated_at: string;
+}
+
+export interface RoleGroupRef {
+  id: string;
+  name: string;
+}
+
+export interface RoleDetail extends Role {
+  user_groups: RoleGroupRef[];
+  effective_user_count: number;
 }
 
 export interface RoleBinding {
