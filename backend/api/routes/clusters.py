@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import get_current_user, require_admin
+from auth.dependencies import RequirePermission
 from database import get_db
 from models import Cluster, User
 from schemas.cluster import ClusterCreate, ClusterResponse, ClusterSummary, ClusterUpdate
@@ -21,7 +21,11 @@ from services.summary_service import cluster_summaries, rack_summaries
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/clusters", tags=["clusters"], dependencies=[Depends(get_current_user)])
+router = APIRouter(
+    prefix="/clusters",
+    tags=["clusters"],
+    dependencies=[Depends(RequirePermission("cluster.view"))],
+)
 
 
 @router.get("", response_model=list[ClusterSummary])
@@ -59,7 +63,7 @@ async def list_cluster_racks(
 async def create_cluster(
     payload: ClusterCreate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("cluster.create")),
 ) -> Cluster:
     try:
         existing = await db.execute(select(Cluster).where(Cluster.name == payload.name))
@@ -91,7 +95,7 @@ async def update_cluster(
     cluster_id: uuid.UUID,
     payload: ClusterUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("cluster.update")),
 ) -> Cluster:
     result = await db.execute(select(Cluster).where(Cluster.id == cluster_id))
     cluster = result.scalar_one_or_none()
@@ -116,7 +120,7 @@ async def update_cluster(
 async def delete_cluster(
     cluster_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("cluster.delete")),
 ) -> None:
     result = await db.execute(select(Cluster).where(Cluster.id == cluster_id))
     cluster = result.scalar_one_or_none()

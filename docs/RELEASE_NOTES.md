@@ -1,5 +1,75 @@
 # Release Notes
 
+## 1.2.1 (2026-07-10) — Access Management (RBAC)
+
+Replaces the standalone User Management page with a full Role-Based Access
+Control architecture. Authorization now flows:
+
+    User → User Group → Role Binding → Role → Permissions → Visible Menus + Allowed Actions
+
+Users never receive permissions directly — they inherit them through User
+Groups, which are granted Roles via Role Bindings, and each Role carries a set
+of business-action Permissions. Fully backward compatible: passwords and the
+existing JWT login are unchanged, and one additive migration (0009) creates the
+RBAC tables and extends `users`. Existing admin accounts are migrated
+automatically into a built-in **Administrators** group bound to the
+**Administrator** role, so nothing changes for current operators.
+
+### Data model (migration 0009, additive)
+
+- New tables: `permissions`, `roles`, `role_permissions`, `user_groups`,
+  `user_group_members`, `role_bindings`.
+- `users` extended with `display_name`, `email`, `status` (existing rows get
+  `status='ACTIVE'`; `enabled` remains the authoritative login gate).
+- `role_bindings.scope_type` defaults to `GLOBAL` and the schema is
+  future-compatible with `CLUSTER` / `RACK` scoping (`scope_id`) without a
+  further migration.
+- Seed data (permission catalog, the Administrator/Operator/Viewer system
+  roles, their permission maps, the Administrators group + binding, and the
+  admin migration) is applied idempotently at startup — the same pattern used
+  for retention policies in 1.2.0 — so new permissions in future releases seed
+  automatically.
+
+### Permissions & system roles
+
+- Permissions are **business-action codes** grouped by domain, e.g.
+  `dashboard.view`, `cluster.create`, `rack.layout.edit`, `device.install`,
+  `collector.run`, `discovery.scan`, `role.update`, `user.create`.
+- Three built-in **system roles** (read-only, cannot be edited or deleted):
+  **Administrator** (all permissions), **Operator** (inventory, collectors and
+  discovery — no access management), **Viewer** (read-only).
+- Custom roles can be created with any subset of permissions.
+
+### Centralized authorization
+
+- A single `RequirePermission("<code>")` dependency guards every endpoint —
+  no per-controller role checks. Missing permission returns **HTTP 403**.
+- Permission resolution walks the User → Group → Binding → Role → Permission
+  chain. The legacy `ADMIN` role remains a break-glass superuser so an
+  administrator can never be locked out.
+- The built-in Administrator binding cannot be removed and system roles/groups
+  cannot be deleted (lockout protection). Password hashes are never exposed.
+
+### Access Management API
+
+- `GET /api/permissions` (read-only catalog).
+- `GET/POST/PATCH/DELETE /api/roles` (system roles are read-only).
+- `GET/POST/PATCH/DELETE /api/user-groups` (with membership management).
+- `GET/POST/DELETE /api/role-bindings`.
+- `GET/POST/PATCH/DELETE /api/users` extended with display name, email, status
+  and group membership.
+- `GET /api/auth/me` now returns the user's effective `permissions` and the
+  menu→permission map so the frontend stays in sync with the backend.
+
+### Frontend
+
+- New **Access Management** sidebar section: Users, User Groups, Roles, Role
+  Bindings, and a read-only Permissions catalog.
+- Reusable permission-aware components: `<RequirePermission>` (route guard) and
+  `<PermissionGate>` (hides buttons/controls). The sidebar and every admin route
+  are now **permission-driven** — users only see what they can access.
+- Frontend checks are UX-only; the backend is always authoritative.
+
 ## 1.2.0 (2026-07-08) — Operational Automation & Discovery
 
 The first operational-automation milestone. Six additive features turn the

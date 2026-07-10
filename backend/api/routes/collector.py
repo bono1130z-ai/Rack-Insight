@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import require_admin
+from auth.dependencies import RequirePermission
 from database import get_db
 from models import CollectorRun, Device, Firmware, Sensor, Storage
 from schemas.collector import CollectorDeviceStatus, CollectorRunResponse
@@ -16,7 +16,9 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(
-    prefix="/collector", tags=["collector"], dependencies=[Depends(require_admin)]
+    prefix="/collector",
+    tags=["collector"],
+    dependencies=[Depends(RequirePermission("collector.view"))],
 )
 
 RECENT_LOGS_LIMIT: int = 50

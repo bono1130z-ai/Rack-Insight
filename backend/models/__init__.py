@@ -19,6 +19,14 @@ from models.inventory import (
     SwitchInventory,
 )
 from models.rack import Rack, RackUnit
+from models.rbac import (
+    Permission,
+    Role,
+    RoleBinding,
+    RolePermission,
+    UserGroup,
+    UserGroupMember,
+)
 from models.retention import RetentionPolicy
 from models.snapshot import Snapshot
 from models.user import User, UserRole
@@ -53,4 +61,10 @@ __all__ = [
     "DiscoveredDevice",
     "DiscoveryStatus",
     "RetentionPolicy",
+    "Permission",
+    "Role",
+    "RolePermission",
+    "UserGroup",
+    "UserGroupMember",
+    "RoleBinding",
 ]

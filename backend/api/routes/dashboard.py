@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import get_current_user
+from auth.dependencies import RequirePermission
 from database import get_db
 from schemas.dashboard import DashboardSummary
 from services.summary_service import dashboard_summary
@@ -10,7 +10,9 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(
-    prefix="/dashboard", tags=["dashboard"], dependencies=[Depends(get_current_user)]
+    prefix="/dashboard",
+    tags=["dashboard"],
+    dependencies=[Depends(RequirePermission("dashboard.view"))],
 )
 
 

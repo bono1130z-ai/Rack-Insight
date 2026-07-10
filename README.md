@@ -61,9 +61,27 @@ Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack 
 - **Security** — JWT access/refresh tokens, bcrypt password hashes, iLO/SSH/
   SNMP credentials encrypted at rest (Fernet), secrets never logged or
   returned by the API.
-- **Roles** — `ADMIN` manages clusters/racks/devices/users/credentials and can
-  run collectors; `USER` has read-only access to all inventory views and sees
-  no administration menus.
+- **Access control (RBAC, 1.2.1)** — authorization flows
+  User → User Group → Role Binding → Role → Permissions. Users inherit
+  permissions through group membership; built-in **Administrator / Operator /
+  Viewer** roles plus custom roles; the sidebar and every action are
+  permission-driven. The legacy `ADMIN` role remains a break-glass superuser.
+
+### What's new in 1.2.1 — Access Management (RBAC)
+
+- **Role-Based Access Control** replaces the standalone User Management page.
+  Permissions are business-action codes (`cluster.create`, `device.install`,
+  `collector.run`, `role.update`, …) bundled into roles, bound to user groups,
+  and inherited by users through membership.
+- **Centralized authorization** — a single `RequirePermission(code)` guards
+  every endpoint (HTTP 403 on denial); no per-controller role checks.
+- **Access Management pages** — Users (with display name / email / status /
+  group membership), User Groups, Roles, Role Bindings, and a read-only
+  Permissions catalog.
+- Additive migration (0009); existing admins are auto-migrated into a built-in
+  Administrators group. Password hashes are never exposed.
+
+See `docs/RELEASE_NOTES.md` for the full 1.2.1 notes.
 
 ### What's new in 1.2.0 — Operational Automation & Discovery
 
@@ -155,7 +173,10 @@ complete the entire initial setup from the web UI (no CLI / Swagger needed):
   management IP, start U, height, orientation, collector types
   (Redfish / SSH / Cisco) and stored-credential selection. Devices can be
   repositioned by U selection or by drag & drop on the 42U rack view.
-- **User Management** — CRUD, ADMIN/USER role changes, password resets.
+- **Access Management (RBAC)** — Users (display name / email / status / group
+  membership), User Groups, Roles (Administrator / Operator / Viewer + custom),
+  Role Bindings, and a read-only Permissions catalog. Menus and actions are
+  permission-driven.
 - **Credential Management** — named Redfish / SSH / SNMP credentials,
   encrypted at rest and never displayed after saving.
 - **Collector Management** — per-device Collect Now, last success/failure,

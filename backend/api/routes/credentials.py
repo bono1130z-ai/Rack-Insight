@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import require_admin
+from auth.dependencies import RequirePermission
 from database import get_db
 from models import Credential, User
 from schemas.credential import CredentialCreate, CredentialResponse, CredentialUpdate
@@ -21,7 +21,9 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(
-    prefix="/credentials", tags=["credentials"], dependencies=[Depends(require_admin)]
+    prefix="/credentials",
+    tags=["credentials"],
+    dependencies=[Depends(RequirePermission("credential.view"))],
 )
 
 
@@ -51,7 +53,7 @@ async def list_credentials(db: AsyncSession = Depends(get_db)) -> list[Credentia
 async def create_credential(
     payload: CredentialCreate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("credential.create")),
 ) -> CredentialResponse:
     try:
         existing = await db.execute(select(Credential).where(Credential.name == payload.name))
@@ -91,7 +93,7 @@ async def update_credential(
     credential_id: uuid.UUID,
     payload: CredentialUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("credential.update")),
 ) -> CredentialResponse:
     credential = await _get_credential(db, credential_id)
     old = snapshot_entity(credential)
@@ -115,7 +117,7 @@ async def update_credential(
 async def delete_credential(
     credential_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("credential.delete")),
 ) -> None:
     credential = await _get_credential(db, credential_id)
     record_audit(

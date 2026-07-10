@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import get_current_user, require_admin
+from auth.dependencies import RequirePermission
 from database import get_db
 from models import Device, DeviceTemplate, User
 from schemas.compliance import TemplateComplianceReport
@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 router = APIRouter(
     prefix="/device-templates",
     tags=["device-templates"],
-    dependencies=[Depends(get_current_user)],
+    dependencies=[Depends(RequirePermission("template.view"))],
 )
 
 
@@ -85,7 +85,7 @@ async def template_compliance(
 async def create_template(
     payload: DeviceTemplateCreate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("template.create")),
 ) -> DeviceTemplate:
     try:
         existing = await db.execute(
@@ -119,7 +119,7 @@ async def update_template(
     template_id: uuid.UUID,
     payload: DeviceTemplateUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("template.update")),
 ) -> DeviceTemplate:
     template = await _get_template(db, template_id)
     old = snapshot_entity(template)
@@ -138,7 +138,7 @@ async def update_template(
 async def delete_template(
     template_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("template.delete")),
 ) -> None:
     template = await _get_template(db, template_id)
     in_use = (

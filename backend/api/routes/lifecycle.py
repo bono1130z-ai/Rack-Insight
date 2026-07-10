@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import get_current_user, require_admin
+from auth.dependencies import RequirePermission
 from database import get_db
 from models import RetentionPolicy
 from schemas.lifecycle import CleanupResult, RetentionPolicyResponse, RetentionPolicyUpdate
@@ -12,7 +12,9 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(
-    prefix="/lifecycle", tags=["lifecycle"], dependencies=[Depends(get_current_user)]
+    prefix="/lifecycle",
+    tags=["lifecycle"],
+    dependencies=[Depends(RequirePermission("lifecycle.view"))],
 )
 
 
@@ -24,7 +26,7 @@ async def get_policies(db: AsyncSession = Depends(get_db)) -> list[RetentionPoli
 @router.patch(
     "/policies/{category}",
     response_model=RetentionPolicyResponse,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(RequirePermission("lifecycle.manage"))],
 )
 async def update_policy(
     category: str, payload: RetentionPolicyUpdate, db: AsyncSession = Depends(get_db)
@@ -45,7 +47,8 @@ async def update_policy(
 
 
 @router.post(
-    "/cleanup", response_model=CleanupResult, dependencies=[Depends(require_admin)]
+    "/cleanup", response_model=CleanupResult,
+    dependencies=[Depends(RequirePermission("lifecycle.manage"))],
 )
 async def cleanup(db: AsyncSession = Depends(get_db)) -> CleanupResult:
     try:

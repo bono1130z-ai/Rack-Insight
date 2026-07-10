@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import exists, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import get_current_user, require_admin
+from auth.dependencies import RequirePermission
 from cache.redis_cache import cache_delete, device_inventory_key
 from database import get_db
 from models import (
@@ -53,7 +53,11 @@ from utils.crypto import encrypt_secret
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/devices", tags=["devices"], dependencies=[Depends(get_current_user)])
+router = APIRouter(
+    prefix="/devices",
+    tags=["devices"],
+    dependencies=[Depends(RequirePermission("device.view"))],
+)
 
 _SECRET_FIELDS = {
     "ilo_password": "ilo_password_encrypted",
@@ -317,7 +321,7 @@ async def get_drift(
 @router.post(
     "/{device_id}/refresh",
     response_model=DeviceInventoryResponse,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(RequirePermission("collector.run"))],
 )
 async def refresh(
     device_id: uuid.UUID, db: AsyncSession = Depends(get_db)
@@ -341,7 +345,7 @@ async def refresh(
 async def create_device(
     payload: DeviceCreate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("device.install")),
 ) -> Device:
     try:
         rack = await _require_rack(db, payload.rack_id)
@@ -393,7 +397,7 @@ async def create_device(
 async def bulk_create_devices(
     payload: DeviceBulkCreate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("device.install")),
 ) -> DeviceBulkCreateResult:
     """Install multiple instances in one transaction (P3 / 1.1.2 wizard).
 
@@ -611,7 +615,7 @@ async def update_device(
     device_id: uuid.UUID,
     payload: DeviceUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("device.update")),
 ) -> Device:
     device = await _get_device(db, device_id)
     old = snapshot_entity(device)
@@ -659,13 +663,13 @@ async def update_device(
 @router.put(
     "/{device_id}/position",
     response_model=DeviceResponse,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(RequirePermission("device.move"))],
 )
 async def move_device(
     device_id: uuid.UUID,
     payload: DevicePositionUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("device.move")),
 ) -> Device:
     """Assign/move a device to a U position (drag & drop / U selection).
 
@@ -734,12 +738,12 @@ async def move_device(
 @router.delete(
     "/{device_id}/position",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(RequirePermission("device.move"))],
 )
 async def unassign_device(
     device_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("device.move")),
 ) -> None:
     """Remove a device from its rack slot (uninstall) without deleting it."""
     device = await _get_device(db, device_id)
@@ -767,7 +771,7 @@ async def unassign_device(
 async def delete_device(
     device_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("device.delete")),
 ) -> None:
     device = await _get_device(db, device_id)
     await cache_delete(device_inventory_key(str(device_id)))

@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
+from api.routes import access as access_routes
 from api.routes import audit as audit_routes
 from api.routes import auth as auth_routes
 from api.routes import clusters as cluster_routes
@@ -27,6 +28,7 @@ from database.migrations import run_migrations
 from models import User, UserRole
 from scheduler.background import start_scheduler, stop_scheduler
 from services.lifecycle_service import ensure_default_policies
+from services.rbac_service import ensure_rbac_seed
 from utils.logging import configure_logging, get_logger
 
 settings = get_settings()
@@ -35,7 +37,12 @@ logger = get_logger(__name__)
 
 
 async def _bootstrap_admin() -> None:
-    """Create the default admin account on first start."""
+    """Create the default admin account on first start, then seed RBAC.
+
+    The RBAC catalog, system roles and the Administrators group are seeded
+    idempotently after the admin exists, so the admin is auto-migrated into the
+    Administrators group (which carries the Administrator role binding).
+    """
     async with async_session_factory() as db:
         result = await db.execute(select(User).where(User.role == UserRole.ADMIN))
         if result.scalars().first() is None:
@@ -48,6 +55,7 @@ async def _bootstrap_admin() -> None:
             )
             await db.commit()
             logger.info("Default admin account created")
+        await ensure_rbac_seed(db)
 
 
 @asynccontextmanager
@@ -83,6 +91,7 @@ app.add_middleware(
 
 app.include_router(auth_routes.router, prefix=settings.api_prefix)
 app.include_router(user_routes.router, prefix=settings.api_prefix)
+app.include_router(access_routes.router, prefix=settings.api_prefix)
 app.include_router(cluster_routes.router, prefix=settings.api_prefix)
 app.include_router(rack_routes.router, prefix=settings.api_prefix)
 app.include_router(device_routes.router, prefix=settings.api_prefix)

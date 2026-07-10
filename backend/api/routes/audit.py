@@ -7,13 +7,17 @@ from pydantic import BaseModel, ConfigDict
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import require_admin
+from auth.dependencies import RequirePermission
 from database import get_db
 from models import AuditLog
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/audit", tags=["audit"], dependencies=[Depends(require_admin)])
+router = APIRouter(
+    prefix="/audit",
+    tags=["audit"],
+    dependencies=[Depends(RequirePermission("audit.view"))],
+)
 
 DEFAULT_PAGE_SIZE = 25
 MAX_PAGE_SIZE = 200

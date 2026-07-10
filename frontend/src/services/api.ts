@@ -19,10 +19,14 @@ import type {
   DeviceSearchPage,
   DeviceTemplate,
   Me,
+  Permission,
   RackLayout,
   RackSummary,
+  Role,
+  RoleBinding,
   TokenPair,
   User,
+  UserGroup,
 } from "@/types";
 
 const API_BASE = "/api";
@@ -261,9 +265,39 @@ export const api = {
   },
 
   users: () => request<User[]>("/users"),
-  createUser: (payload: { username: string; password: string; role: string }) =>
+  createUser: (payload: Record<string, unknown>) =>
     request<User>("/users", { method: "POST", body: JSON.stringify(payload) }),
   updateUser: (userId: string, payload: Record<string, unknown>) =>
     request<User>(`/users/${userId}`, { method: "PATCH", body: JSON.stringify(payload) }),
   deleteUser: (userId: string) => request<void>(`/users/${userId}`, { method: "DELETE" }),
+
+  // --- Access Management (RBAC) ---
+  permissions: () => request<Permission[]>("/permissions"),
+
+  roles: () => request<Role[]>("/roles"),
+  createRole: (payload: Record<string, unknown>) =>
+    request<Role>("/roles", { method: "POST", body: JSON.stringify(payload) }),
+  updateRole: (id: string, payload: Record<string, unknown>) =>
+    request<Role>(`/roles/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deleteRole: (id: string) => request<void>(`/roles/${id}`, { method: "DELETE" }),
+
+  userGroups: () => request<UserGroup[]>("/user-groups"),
+  createUserGroup: (payload: Record<string, unknown>) =>
+    request<UserGroup>("/user-groups", { method: "POST", body: JSON.stringify(payload) }),
+  updateUserGroup: (id: string, payload: Record<string, unknown>) =>
+    request<UserGroup>(`/user-groups/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
+  deleteUserGroup: (id: string) =>
+    request<void>(`/user-groups/${id}`, { method: "DELETE" }),
+
+  roleBindings: () => request<RoleBinding[]>("/role-bindings"),
+  createRoleBinding: (payload: Record<string, unknown>) =>
+    request<RoleBinding>("/role-bindings", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }),
+  deleteRoleBinding: (id: string) =>
+    request<void>(`/role-bindings/${id}`, { method: "DELETE" }),
 };

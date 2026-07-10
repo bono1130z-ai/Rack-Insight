@@ -68,6 +68,22 @@ export function useUsers() {
   return useQuery({ queryKey: ["users"], queryFn: api.users });
 }
 
+export function usePermissions() {
+  return useQuery({ queryKey: ["permissions"], queryFn: api.permissions });
+}
+
+export function useRoles() {
+  return useQuery({ queryKey: ["roles"], queryFn: api.roles });
+}
+
+export function useUserGroups() {
+  return useQuery({ queryKey: ["user-groups"], queryFn: api.userGroups });
+}
+
+export function useRoleBindings() {
+  return useQuery({ queryKey: ["role-bindings"], queryFn: api.roleBindings });
+}
+
 export function useCredentials() {
   return useQuery({ queryKey: ["credentials"], queryFn: api.credentials });
 }

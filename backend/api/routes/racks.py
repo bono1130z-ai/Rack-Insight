@@ -7,7 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from auth.dependencies import get_current_user, require_admin
+from auth.dependencies import RequirePermission
 from database import get_db
 from models import Rack, RackUnit, User
 from schemas.rack import (
@@ -30,7 +30,11 @@ from services.audit_service import (
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/racks", tags=["racks"], dependencies=[Depends(get_current_user)])
+router = APIRouter(
+    prefix="/racks",
+    tags=["racks"],
+    dependencies=[Depends(RequirePermission("rack.view"))],
+)
 
 
 async def _get_rack(db: AsyncSession, rack_id: uuid.UUID) -> Rack:
@@ -67,7 +71,7 @@ async def get_rack_layout(
 @router.put(
     "/{rack_id}/layout",
     response_model=RackLayoutResponse,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(RequirePermission("rack.layout.edit"))],
 )
 async def update_rack_layout(
     rack_id: uuid.UUID, payload: RackLayoutUpdate, db: AsyncSession = Depends(get_db)
@@ -120,7 +124,7 @@ async def update_rack_layout(
 async def create_rack(
     payload: RackCreate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("rack.create")),
 ) -> Rack:
     try:
         rack = Rack(**payload.model_dump())
@@ -144,12 +148,11 @@ async def create_rack(
     "/bulk",
     response_model=RackBulkCreateResult,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_admin)],
 )
 async def bulk_create_racks(
     payload: RackBulkCreate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("rack.create")),
 ) -> RackBulkCreateResult:
     """Create prefix-N racks in one call; existing names are skipped (F7)."""
     try:
@@ -212,7 +215,7 @@ async def update_rack(
     rack_id: uuid.UUID,
     payload: RackUpdate,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("rack.update")),
 ) -> Rack:
     rack = await _get_rack(db, rack_id)
     old = snapshot_entity(rack)
@@ -231,7 +234,7 @@ async def update_rack(
 async def delete_rack(
     rack_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("rack.delete")),
 ) -> None:
     rack = await _get_rack(db, rack_id)
     record_audit(

@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { RequirePermission } from "@/components/RequirePermission";
 import { AppLayout } from "@/layouts/AppLayout";
 import { AuditLogPage } from "@/pages/admin/AuditLogPage";
 import { ClusterManagementPage } from "@/pages/admin/ClusterManagementPage";
@@ -9,8 +10,12 @@ import { DeviceManagementPage } from "@/pages/admin/DeviceManagementPage";
 import { DeviceTemplatesPage } from "@/pages/admin/DeviceTemplatesPage";
 import { DiscoveryPage } from "@/pages/admin/DiscoveryPage";
 import { LifecyclePage } from "@/pages/admin/LifecyclePage";
+import { PermissionsPage } from "@/pages/admin/PermissionsPage";
 import { RackEditorPage } from "@/pages/admin/RackEditorPage";
 import { RackManagementPage } from "@/pages/admin/RackManagementPage";
+import { RoleBindingsPage } from "@/pages/admin/RoleBindingsPage";
+import { RolesPage } from "@/pages/admin/RolesPage";
+import { UserGroupsPage } from "@/pages/admin/UserGroupsPage";
 import { UserManagementPage } from "@/pages/admin/UserManagementPage";
 import { DashboardPage } from "@/pages/DashboardPage";
 import { DeviceDetailPage } from "@/pages/DeviceDetailPage";
@@ -18,19 +23,12 @@ import { LoginPage } from "@/pages/LoginPage";
 import { RackDetailPage } from "@/pages/RackDetailPage";
 import { RackListPage } from "@/pages/RackListPage";
 import { SearchPage } from "@/pages/SearchPage";
-import { useAuthStore } from "@/stores/auth";
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: { retry: 1, staleTime: 30_000, refetchOnWindowFocus: false },
   },
 });
-
-function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { user } = useAuthStore();
-  if (user?.role !== "ADMIN") return <Navigate to="/" replace />;
-  return <>{children}</>;
-}
 
 export default function App() {
   return (
@@ -46,90 +44,122 @@ export default function App() {
             <Route
               path="/racks/:rackId/edit"
               element={
-                <AdminRoute>
+                <RequirePermission permission="rack.layout.edit">
                   <RackEditorPage />
-                </AdminRoute>
+                </RequirePermission>
               }
             />
             <Route path="/devices/:deviceId" element={<DeviceDetailPage />} />
             <Route
               path="/admin/clusters"
               element={
-                <AdminRoute>
+                <RequirePermission permission="cluster.view">
                   <ClusterManagementPage />
-                </AdminRoute>
+                </RequirePermission>
               }
             />
             <Route
               path="/admin/racks"
               element={
-                <AdminRoute>
+                <RequirePermission permission="rack.view">
                   <RackManagementPage />
-                </AdminRoute>
+                </RequirePermission>
               }
             />
             <Route
               path="/admin/device-templates"
               element={
-                <AdminRoute>
+                <RequirePermission permission="template.view">
                   <DeviceTemplatesPage />
-                </AdminRoute>
+                </RequirePermission>
               }
             />
             <Route
               path="/admin/devices"
               element={
-                <AdminRoute>
+                <RequirePermission permission="device.view">
                   <DeviceManagementPage />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/users"
-              element={
-                <AdminRoute>
-                  <UserManagementPage />
-                </AdminRoute>
+                </RequirePermission>
               }
             />
             <Route
               path="/admin/credentials"
               element={
-                <AdminRoute>
+                <RequirePermission permission="credential.view">
                   <CredentialManagementPage />
-                </AdminRoute>
+                </RequirePermission>
               }
             />
             <Route
               path="/admin/collectors"
               element={
-                <AdminRoute>
+                <RequirePermission permission="collector.view">
                   <CollectorManagementPage />
-                </AdminRoute>
+                </RequirePermission>
               }
             />
             <Route
               path="/admin/discovery"
               element={
-                <AdminRoute>
+                <RequirePermission permission="discovery.view">
                   <DiscoveryPage />
-                </AdminRoute>
+                </RequirePermission>
               }
             />
             <Route
               path="/admin/lifecycle"
               element={
-                <AdminRoute>
+                <RequirePermission permission="lifecycle.view">
                   <LifecyclePage />
-                </AdminRoute>
+                </RequirePermission>
               }
             />
             <Route
               path="/admin/audit"
               element={
-                <AdminRoute>
+                <RequirePermission permission="audit.view">
                   <AuditLogPage />
-                </AdminRoute>
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/users"
+              element={
+                <RequirePermission permission="user.view">
+                  <UserManagementPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/user-groups"
+              element={
+                <RequirePermission permission="group.view">
+                  <UserGroupsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/roles"
+              element={
+                <RequirePermission permission="role.view">
+                  <RolesPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/role-bindings"
+              element={
+                <RequirePermission permission="binding.view">
+                  <RoleBindingsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/permissions"
+              element={
+                <RequirePermission permission="permission.view">
+                  <PermissionsPage />
+                </RequirePermission>
               }
             />
           </Route>

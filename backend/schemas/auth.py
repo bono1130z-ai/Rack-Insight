@@ -25,4 +25,10 @@ class MeResponse(BaseModel):
     id: str
     username: str
     role: UserRole
+    display_name: str | None = None
+    email: str | None = None
     last_login: datetime | None
+    # Effective permission codes resolved through User Groups -> Roles.
+    permissions: list[str] = []
+    # Menu key -> required permission, so the frontend sidebar stays in sync.
+    menus: list[dict[str, str]] = []

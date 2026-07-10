@@ -45,3 +45,29 @@ async def require_admin(user: User = Depends(get_current_user)) -> User:
             status_code=status.HTTP_403_FORBIDDEN, detail="Administrator privileges required"
         )
     return user
+
+
+def RequirePermission(permission: str):
+    """Centralized authorization guard.
+
+    Returns a FastAPI dependency that resolves the current user, checks the
+    given business-action permission through the RBAC chain, and raises HTTP 403
+    when it is missing. Use as ``actor: User = Depends(RequirePermission("x.y"))``
+    so the authenticated user is still available to the handler.
+    """
+
+    async def _dependency(
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+    ) -> User:
+        # Imported lazily to avoid a circular import (services -> models -> ...).
+        from services.rbac_service import user_has_permission
+
+        if not await user_has_permission(db, user, permission):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permission denied: {permission}",
+            )
+        return user
+
+    return _dependency

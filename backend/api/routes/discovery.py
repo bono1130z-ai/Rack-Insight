@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.routes.devices import bulk_create_devices
-from auth.dependencies import get_current_user, require_admin
+from auth.dependencies import RequirePermission
 from database import get_db
 from models import DiscoveredDevice, DiscoveryStatus, User
 from schemas.device import DeviceBulkCreate, DeviceBulkItem, DeviceBulkCreateResult
@@ -27,7 +27,9 @@ from utils.logging import get_logger
 
 logger = get_logger(__name__)
 router = APIRouter(
-    prefix="/discovery", tags=["discovery"], dependencies=[Depends(get_current_user)]
+    prefix="/discovery",
+    tags=["discovery"],
+    dependencies=[Depends(RequirePermission("discovery.view"))],
 )
 
 
@@ -42,7 +44,8 @@ async def list_discoveries(
 
 
 @router.post(
-    "/scan", response_model=DiscoveryScanResult, dependencies=[Depends(require_admin)]
+    "/scan", response_model=DiscoveryScanResult,
+    dependencies=[Depends(RequirePermission("discovery.scan"))],
 )
 async def scan(
     payload: DiscoveryScanRequest, db: AsyncSession = Depends(get_db)
@@ -72,12 +75,13 @@ async def scan(
 
 
 @router.post(
-    "/import", response_model=DeviceBulkCreateResult, dependencies=[Depends(require_admin)]
+    "/import", response_model=DeviceBulkCreateResult,
+    dependencies=[Depends(RequirePermission("discovery.import"))],
 )
 async def import_discovered(
     payload: DiscoveryImportRequest,
     db: AsyncSession = Depends(get_db),
-    admin: User = Depends(require_admin),
+    admin: User = Depends(RequirePermission("discovery.import")),
 ) -> DeviceBulkCreateResult:
     """Create Installed Devices from selected discoveries (reuses bulk create)."""
     try:
@@ -128,7 +132,7 @@ async def import_discovered(
 @router.delete(
     "/{discovery_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(require_admin)],
+    dependencies=[Depends(RequirePermission("discovery.import"))],
 )
 async def ignore_discovery(
     discovery_id: uuid.UUID, db: AsyncSession = Depends(get_db)

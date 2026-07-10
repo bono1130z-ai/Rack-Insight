@@ -4,13 +4,17 @@ import uuid
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from auth.dependencies import get_current_user
+from auth.dependencies import RequirePermission
 from database import get_db
 from services.export_service import EXPORT_FORMATS, EXPORT_SCOPES, export_inventory
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
-router = APIRouter(prefix="/export", tags=["export"], dependencies=[Depends(get_current_user)])
+router = APIRouter(
+    prefix="/export",
+    tags=["export"],
+    dependencies=[Depends(RequirePermission("export.run"))],
+)
 
 
 @router.get(

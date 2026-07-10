@@ -17,7 +17,9 @@ from auth.security import (
 )
 from database import get_db
 from models import User
+from rbac_catalog import MENU_PERMISSIONS
 from schemas.auth import LoginRequest, MeResponse, RefreshRequest, TokenResponse
+from services.rbac_service import get_user_permissions
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -77,7 +79,17 @@ async def refresh_token(
 
 
 @router.get("/me", response_model=MeResponse)
-async def me(user: User = Depends(get_current_user)) -> MeResponse:
+async def me(
+    user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)
+) -> MeResponse:
+    permissions = await get_user_permissions(db, user)
     return MeResponse(
-        id=str(user.id), username=user.username, role=user.role, last_login=user.last_login
+        id=str(user.id),
+        username=user.username,
+        role=user.role,
+        display_name=user.display_name,
+        email=user.email,
+        last_login=user.last_login,
+        permissions=sorted(permissions),
+        menus=[dict(m) for m in MENU_PERMISSIONS],
     )

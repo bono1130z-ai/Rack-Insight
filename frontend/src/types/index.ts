@@ -1,12 +1,22 @@
 export type UserRole = "ADMIN" | "USER";
+export type UserStatus = "ACTIVE" | "DISABLED";
 export type DeviceType = "SERVER" | "SWITCH" | "PDU" | "KVM" | "OTHER";
 export type DeviceStatus = "ONLINE" | "OFFLINE" | "WARNING" | "UNKNOWN";
+
+export interface MenuPermission {
+  key: string;
+  permission: string;
+}
 
 export interface Me {
   id: string;
   username: string;
   role: UserRole;
+  display_name: string | null;
+  email: string | null;
   last_login: string | null;
+  permissions: string[];
+  menus: MenuPermission[];
 }
 
 export interface TokenPair {
@@ -19,8 +29,54 @@ export interface User {
   id: string;
   username: string;
   role: UserRole;
+  display_name: string | null;
+  email: string | null;
+  status: UserStatus;
   enabled: boolean;
   last_login: string | null;
+  group_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Permission {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  description: string | null;
+}
+
+export interface Role {
+  id: string;
+  name: string;
+  description: string | null;
+  is_system: boolean;
+  permission_codes: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface UserGroup {
+  id: string;
+  name: string;
+  description: string | null;
+  is_system: boolean;
+  member_ids: string[];
+  member_count: number;
+  role_names: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface RoleBinding {
+  id: string;
+  user_group_id: string;
+  user_group_name: string;
+  role_id: string;
+  role_name: string;
+  scope_type: string;
+  scope_id: string | null;
   created_at: string;
   updated_at: string;
 }
