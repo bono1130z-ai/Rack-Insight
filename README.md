@@ -83,6 +83,34 @@ Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack 
 
 See `docs/RELEASE_NOTES.md` for the full 1.2.1 notes.
 
+### What's new in 1.3.0 — Operations & Alert Center
+
+Rack Insight is now an **Operations Platform**: administrators immediately see
+operational issues, hardware changes and server health.
+
+- **Pipeline**: Collector → Inventory Snapshot → **Event Engine** → **Alert
+  Engine** → UI. The collector only stores snapshots; the Event Engine
+  compares snapshot N-1 vs N and generates events; the Alert Engine creates
+  and auto-resolves alerts.
+- **Alert Center** — top-level Alerts menu (Alerts + History), filterable
+  alert table (severity/status/category/cluster/rack/vendor/model/hostname/
+  date), notification bell with unread count. Hardware/Firmware alerts resolve
+  manually; state alerts (offline, sensor, collector, credential) auto-resolve
+  on recovery. Offline/sensor alerts fire after a configurable number of
+  consecutive failures (default 3).
+- **Device History** — permanent, immutable record of firmware upgrades,
+  hardware replacements, collector failures and manual resolves, with a visual
+  before → after **Diff Viewer**.
+- **Health** — Device Detail Health tab: overall health, sensor groups
+  (temperature/power/fan), storage/memory/network health, health timeline.
+  Sensor fluctuations affect Health only — never hardware alerts.
+- **Operations dashboard** — alert counts, offline/healthy devices, latest
+  alerts, critical devices, recent hardware/firmware changes; the
+  Cluster → Rack → Device browsing flow is unchanged.
+- Drift UI removed (superseded by Alerts + History). One additive migration
+  (0010); fully backward compatible with 1.2.x. See `CHANGELOG.md` and
+  `docs/RELEASE_NOTES.md`.
+
 ### What's new in 1.2.2 — Administration UX & Navigation
 
 - **Grouped, collapsible sidebar** — Dashboard, Inventory, Operations,

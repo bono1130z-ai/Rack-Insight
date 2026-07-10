@@ -18,6 +18,7 @@ from models.inventory import (
     Storage,
     SwitchInventory,
 )
+from models.operations import Alert, AlertSettings, DeviceHistory, Event
 from models.rack import Rack, RackUnit
 from models.rbac import (
     Permission,
@@ -67,4 +68,8 @@ __all__ = [
     "UserGroup",
     "UserGroupMember",
     "RoleBinding",
+    "Event",
+    "Alert",
+    "DeviceHistory",
+    "AlertSettings",
 ]

@@ -44,11 +44,12 @@ from services.audit_service import (
     snapshot_entity,
 )
 from services.drift_service import get_device_drift
-from services.health_service import compute_health
+from services.health_service import compute_health, get_device_health
 from services.inventory_service import get_device_inventory, get_latest_snapshot
 from services.placement_service import validate_placement
 from services.refresh_service import refresh_device
 from schemas.drift import DriftReport
+from schemas.operations import DeviceHealthResponse
 from utils.crypto import encrypt_secret
 from utils.logging import get_logger
 
@@ -305,7 +306,10 @@ async def get_inventory(
 async def get_drift(
     device_id: uuid.UUID, db: AsyncSession = Depends(get_db)
 ) -> DriftReport:
-    """Hardware drift between the two most recent successful collections (F4)."""
+    """Hardware drift between the two most recent successful collections.
+
+    Kept for API backward compatibility (1.2.x). The 1.3.0 UI uses Alerts and
+    Device History instead; the Event Engine performs the comparison."""
     try:
         await _get_device(db, device_id)
         return await get_device_drift(db, device_id)
@@ -315,6 +319,24 @@ async def get_drift(
         logger.exception("Drift detection failed")
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Drift detection failed"
+        ) from exc
+
+
+@router.get("/{device_id}/health", response_model=DeviceHealthResponse)
+async def get_health(
+    device_id: uuid.UUID, db: AsyncSession = Depends(get_db)
+) -> DeviceHealthResponse:
+    """Device Health (1.3.0): overall health, sensor groups, storage/memory/
+    network health, and a health timeline across recent snapshots."""
+    try:
+        device = await _get_device(db, device_id)
+        return await get_device_health(db, device)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.exception("Device health failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Device health failed"
         ) from exc
 
 

@@ -1,10 +1,12 @@
+import { useQuery } from "@tanstack/react-query";
 import { AnimatePresence, motion } from "framer-motion";
 import {
-  Activity,
   AlertTriangle,
+  BellRing,
   Cpu,
-  GitCompareArrows,
   HardDrive,
+  HeartPulse,
+  History,
   Layers,
   MonitorPlay,
   Network as NetworkIcon,
@@ -12,19 +14,22 @@ import {
   Wrench,
 } from "lucide-react";
 import { useState } from "react";
-import { useParams } from "react-router-dom";
-import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Link, useParams } from "react-router-dom";
+import { AlertSeverityBadge, AlertStatusBadge } from "@/components/AlertBadges";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { ExportMenu } from "@/components/ExportMenu";
 import { HealthBadge } from "@/components/HealthBadge";
+import { PermissionGate } from "@/components/PermissionGate";
 import { StatusBadge } from "@/components/StatusBadge";
-import { DriftTab } from "@/features/device/DriftTab";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import { FirmwareTab } from "@/features/device/FirmwareTab";
 import { HardwareTab } from "@/features/device/HardwareTab";
+import { HealthTab } from "@/features/device/HealthTab";
+import { HistoryTab } from "@/features/device/HistoryTab";
 import { NetworkTab } from "@/features/device/NetworkTab";
 import { OverviewTab } from "@/features/device/OverviewTab";
-import { SensorTab } from "@/features/device/SensorTab";
 import { StorageTab } from "@/features/device/StorageTab";
 import { VMTab } from "@/features/device/VMTab";
 import {
@@ -34,20 +39,88 @@ import {
   useRackLayout,
   useRefreshDevice,
 } from "@/hooks/queries";
-import { useAuthStore } from "@/stores/auth";
+import { api } from "@/services/api";
+import type { DeviceInventory } from "@/types";
 
 const TABS = [
   { id: "overview", label: "Overview", Icon: Layers },
+  { id: "health", label: "Health", Icon: HeartPulse },
   { id: "hardware", label: "Hardware", Icon: Cpu },
   { id: "firmware", label: "Firmware", Icon: Wrench },
   { id: "network", label: "Network", Icon: NetworkIcon },
   { id: "storage", label: "Storage", Icon: HardDrive },
   { id: "vm", label: "Virtual Machine", Icon: MonitorPlay },
-  { id: "sensor", label: "Sensor", Icon: Activity },
-  { id: "drift", label: "Drift", Icon: GitCompareArrows },
+  { id: "history", label: "History", Icon: History },
 ] as const;
 
 type TabId = (typeof TABS)[number]["id"];
+
+/** Operations strip on the Overview tab: last alert + last firmware version. */
+function OpsSummary({
+  deviceId,
+  hostname,
+  inventory,
+}: {
+  deviceId: string;
+  hostname: string;
+  inventory: DeviceInventory;
+}) {
+  const { data: alerts } = useQuery({
+    queryKey: ["device", deviceId, "last-alert"],
+    queryFn: () => api.alerts({ hostname, page: 1, page_size: 1 }),
+  });
+  const lastAlert = alerts?.items[0];
+  const bios = inventory.firmwares.find((f) =>
+    (f.component ?? "").toUpperCase().includes("BIOS"),
+  );
+
+  return (
+    <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+      <Card>
+        <CardContent className="flex items-center gap-3 p-4">
+          <BellRing className="h-6 w-6 text-blue-500" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Last Alert
+            </p>
+            {lastAlert ? (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <AlertSeverityBadge severity={lastAlert.severity} />
+                <AlertStatusBadge status={lastAlert.status} />
+                <span className="truncate text-gray-700">{lastAlert.message}</span>
+                <span className="text-xs text-gray-400">
+                  {new Date(lastAlert.created_at).toLocaleString()}
+                </span>
+                <Link to="/alerts" className="text-xs text-blue-600 hover:underline">
+                  Alert Center →
+                </Link>
+              </div>
+            ) : (
+              <p className="text-sm text-gray-400">No alerts for this device.</p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+      <Card>
+        <CardContent className="flex items-center gap-3 p-4">
+          <Wrench className="h-6 w-6 text-blue-500" />
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-gray-400">
+              Last Firmware Version
+            </p>
+            <p className="text-sm text-gray-700">
+              {bios
+                ? `${bios.component}: ${bios.version ?? "-"}`
+                : inventory.firmwares[0]
+                  ? `${inventory.firmwares[0].component ?? "Firmware"}: ${inventory.firmwares[0].version ?? "-"}`
+                  : "No firmware data"}
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
 
 export function DeviceDetailPage() {
   const { deviceId = "" } = useParams();
@@ -57,8 +130,6 @@ export function DeviceDetailPage() {
   const { data: rackLayout } = useRackLayout(device?.rack_id ?? "");
   const { data: cluster } = useCluster(rackLayout?.rack.cluster_id ?? "");
   const refresh = useRefreshDevice(deviceId);
-  const { user } = useAuthStore();
-  const isAdmin = user?.role === "ADMIN";
 
   if (deviceLoading || !device) {
     return (
@@ -106,14 +177,14 @@ export function DeviceDetailPage() {
         </div>
         <div className="ml-auto flex items-center gap-2">
           <ExportMenu scope="device" targetId={deviceId} />
-          {isAdmin && (
+          <PermissionGate permission="collector.run">
             <Button onClick={() => refresh.mutate()} disabled={refresh.isPending}>
               <RefreshCw
                 className={refresh.isPending ? "h-4 w-4 animate-spin" : "h-4 w-4"}
               />
               {refresh.isPending ? "Refreshing…" : "Refresh"}
             </Button>
-          )}
+          </PermissionGate>
         </div>
       </div>
 
@@ -124,7 +195,7 @@ export function DeviceDetailPage() {
           {inventory?.snapshot &&
             ` (last success: ${new Date(inventory.snapshot.collected_at).toLocaleString()})`}
           .
-          {isAdmin && (
+          <PermissionGate permission="collector.run">
             <Button
               variant="outline"
               size="sm"
@@ -133,7 +204,7 @@ export function DeviceDetailPage() {
             >
               Retry
             </Button>
-          )}
+          </PermissionGate>
         </div>
       )}
 
@@ -173,15 +244,24 @@ export function DeviceDetailPage() {
                 transition={{ duration: 0.15 }}
               >
                 {tab === "overview" && (
-                  <OverviewTab inventory={inventory} device={device} />
+                  <>
+                    <OpsSummary
+                      deviceId={deviceId}
+                      hostname={device.hostname}
+                      inventory={inventory}
+                    />
+                    <OverviewTab inventory={inventory} device={device} />
+                  </>
+                )}
+                {tab === "health" && (
+                  <HealthTab deviceId={deviceId} sensors={inventory.sensors} />
                 )}
                 {tab === "hardware" && <HardwareTab inventory={inventory} />}
                 {tab === "firmware" && <FirmwareTab firmwares={inventory.firmwares} />}
                 {tab === "network" && <NetworkTab networks={inventory.networks} />}
                 {tab === "storage" && <StorageTab storages={inventory.storages} />}
                 {tab === "vm" && <VMTab vms={inventory.vms} />}
-                {tab === "sensor" && <SensorTab sensors={inventory.sensors} />}
-                {tab === "drift" && <DriftTab deviceId={deviceId} />}
+                {tab === "history" && <HistoryTab deviceId={deviceId} />}
               </motion.div>
             </AnimatePresence>
           )}

@@ -13,6 +13,38 @@ export function useDashboardSummary() {
   });
 }
 
+export function useDashboardAlerts() {
+  return useQuery({
+    queryKey: ["dashboard", "alerts"],
+    queryFn: api.dashboardAlerts,
+    refetchInterval: 30_000,
+  });
+}
+
+export function useDashboardHealth() {
+  return useQuery({
+    queryKey: ["dashboard", "health"],
+    queryFn: api.dashboardHealth,
+    refetchInterval: 60_000,
+  });
+}
+
+export function useDeviceHealth(deviceId: string) {
+  return useQuery({
+    queryKey: ["device", deviceId, "health"],
+    queryFn: () => api.deviceHealth(deviceId),
+    enabled: Boolean(deviceId),
+  });
+}
+
+export function useDeviceHistory(deviceId: string) {
+  return useQuery({
+    queryKey: ["device", deviceId, "history"],
+    queryFn: () => api.deviceHistory(deviceId),
+    enabled: Boolean(deviceId),
+  });
+}
+
 export function useCluster(clusterId: string) {
   return useQuery({
     queryKey: ["cluster", clusterId],

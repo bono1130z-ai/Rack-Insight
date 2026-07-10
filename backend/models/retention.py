@@ -14,17 +14,25 @@ from models.base import TimestampedModel
 CATEGORY_COLLECTOR_RUNS = "collector_runs"
 CATEGORY_SNAPSHOTS = "snapshots"
 CATEGORY_DISCOVERY = "discovery"
+CATEGORY_RESOLVED_ALERTS = "resolved_alerts"
+# Device history defaults to permanent (policy disabled); enabling it is an
+# explicit administrator opt-in.
+CATEGORY_HISTORY = "history"
 
 RETENTION_CATEGORIES = (
     CATEGORY_COLLECTOR_RUNS,
     CATEGORY_SNAPSHOTS,
     CATEGORY_DISCOVERY,
+    CATEGORY_RESOLVED_ALERTS,
+    CATEGORY_HISTORY,
 )
 
 DEFAULT_RETENTION_DAYS = {
     CATEGORY_COLLECTOR_RUNS: 90,
     CATEGORY_SNAPSHOTS: 180,
     CATEGORY_DISCOVERY: 30,
+    CATEGORY_RESOLVED_ALERTS: 90,
+    CATEGORY_HISTORY: 365,
 }
 
 

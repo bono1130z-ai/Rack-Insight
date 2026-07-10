@@ -9,10 +9,22 @@ from datetime import datetime, timedelta, timezone
 from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import CollectorRun, DiscoveredDevice, DiscoveryStatus, RetentionPolicy, Snapshot
+from models import (
+    Alert,
+    AlertSettings,
+    CollectorRun,
+    DeviceHistory,
+    DiscoveredDevice,
+    DiscoveryStatus,
+    RetentionPolicy,
+    Snapshot,
+)
+from models.operations import ALERT_RESOLVED
 from models.retention import (
     CATEGORY_COLLECTOR_RUNS,
     CATEGORY_DISCOVERY,
+    CATEGORY_HISTORY,
+    CATEGORY_RESOLVED_ALERTS,
     CATEGORY_SNAPSHOTS,
     DEFAULT_RETENTION_DAYS,
     RETENTION_CATEGORIES,
@@ -107,11 +119,43 @@ async def _cleanup_discovery(db: AsyncSession, days: int) -> int:
     return result.rowcount or 0
 
 
+async def _cleanup_resolved_alerts(db: AsyncSession, days: int) -> int:
+    """Only RESOLVED alerts are ever cleaned up; ACTIVE alerts are kept."""
+    result = await db.execute(
+        delete(Alert).where(
+            Alert.status == ALERT_RESOLVED, Alert.created_at < await _cutoff(days)
+        )
+    )
+    return result.rowcount or 0
+
+
+async def _cleanup_history(db: AsyncSession, days: int) -> int:
+    """Device history is permanent by default (policy ships disabled);
+    deleting old entries is an explicit administrator opt-in."""
+    result = await db.execute(
+        delete(DeviceHistory).where(DeviceHistory.created_at < await _cutoff(days))
+    )
+    return result.rowcount or 0
+
+
 _CLEANERS = {
     CATEGORY_COLLECTOR_RUNS: _cleanup_collector_runs,
     CATEGORY_SNAPSHOTS: _cleanup_snapshots,
     CATEGORY_DISCOVERY: _cleanup_discovery,
+    CATEGORY_RESOLVED_ALERTS: _cleanup_resolved_alerts,
+    CATEGORY_HISTORY: _cleanup_history,
 }
+
+
+async def get_alert_settings(db: AsyncSession) -> AlertSettings:
+    """Singleton alert thresholds; created with defaults on first access."""
+    settings = (await db.execute(select(AlertSettings))).scalars().first()
+    if settings is None:
+        settings = AlertSettings()
+        db.add(settings)
+        await db.commit()
+        await db.refresh(settings)
+    return settings
 
 
 async def run_cleanup(db: AsyncSession) -> CleanupResult:

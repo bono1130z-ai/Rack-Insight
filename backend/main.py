@@ -7,6 +7,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
 from api.routes import access as access_routes
+from api.routes import alerts as alert_routes
 from api.routes import audit as audit_routes
 from api.routes import auth as auth_routes
 from api.routes import clusters as cluster_routes
@@ -103,6 +104,7 @@ app.include_router(dashboard_routes.router, prefix=settings.api_prefix)
 app.include_router(audit_routes.router, prefix=settings.api_prefix)
 app.include_router(discovery_routes.router, prefix=settings.api_prefix)
 app.include_router(lifecycle_routes.router, prefix=settings.api_prefix)
+app.include_router(alert_routes.router, prefix=settings.api_prefix)
 
 
 @app.get("/api/health", tags=["system"])

@@ -1,9 +1,13 @@
+import { useQuery } from "@tanstack/react-query";
 import {
   Activity,
+  Bell,
+  BellRing,
   Boxes,
   ChevronDown,
   Cpu,
   HardDrive,
+  History,
   KeyRound,
   LayoutDashboard,
   LogOut,
@@ -24,6 +28,8 @@ import { useState } from "react";
 import { Link, Navigate, NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Toaster } from "@/components/Toaster";
 import { Button } from "@/components/ui/button";
+import { api } from "@/services/api";
+import { countUnread } from "@/stores/alertsSeen";
 import { useAuthStore } from "@/stores/auth";
 
 interface MenuItem {
@@ -68,6 +74,15 @@ const SECTIONS: MenuSection[] = [
     ],
   },
   {
+    key: "alerts",
+    label: "Alerts",
+    Icon: BellRing,
+    items: [
+      { to: "/alerts", label: "Alerts", Icon: BellRing, permission: "alert.view" },
+      { to: "/history", label: "History", Icon: History, permission: "history.view" },
+    ],
+  },
+  {
     key: "administration",
     label: "Administration",
     Icon: Settings,
@@ -97,6 +112,39 @@ function loadCollapsed(): Record<string, boolean> {
   } catch {
     return {};
   }
+}
+
+function NotificationBell() {
+  const navigate = useNavigate();
+  const { hasPermission } = useAuthStore();
+  const canView = hasPermission("alert.view");
+  const { data } = useQuery({
+    queryKey: ["dashboard", "alerts"],
+    queryFn: api.dashboardAlerts,
+    refetchInterval: 30_000,
+    enabled: canView,
+  });
+  if (!canView) return null;
+
+  const active =
+    (data?.active_critical ?? 0) + (data?.active_warning ?? 0) + (data?.active_info ?? 0);
+  const unread = data ? countUnread(data.latest_alerts.map((a) => a.created_at)) : 0;
+
+  return (
+    <button
+      type="button"
+      title={`${active} active alert${active !== 1 ? "s" : ""}`}
+      onClick={() => navigate("/alerts")}
+      className="relative rounded-md p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-700"
+    >
+      {active > 0 ? <BellRing className="h-5 w-5" /> : <Bell className="h-5 w-5" />}
+      {unread > 0 && (
+        <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-semibold text-white">
+          {unread > 99 ? "99+" : unread}
+        </span>
+      )}
+    </button>
+  );
 }
 
 function SidebarLink({ to, label, Icon }: { to: string; label: string; Icon: LucideIcon }) {
@@ -151,6 +199,7 @@ export function AppLayout() {
             Rack Insight
           </Link>
           <div className="flex items-center gap-3 text-sm text-gray-600">
+            <NotificationBell />
             {user && (
               <span>
                 {user.display_name || user.username}

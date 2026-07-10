@@ -1,4 +1,4 @@
-"""Lifecycle / retention endpoints (F5). Read: any user; write + cleanup: admin."""
+"""Lifecycle / retention + alert-threshold settings endpoints."""
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -6,7 +6,8 @@ from auth.dependencies import RequirePermission
 from database import get_db
 from models import RetentionPolicy
 from schemas.lifecycle import CleanupResult, RetentionPolicyResponse, RetentionPolicyUpdate
-from services.lifecycle_service import list_policies, run_cleanup
+from schemas.operations import AlertSettingsResponse, AlertSettingsUpdate
+from services.lifecycle_service import get_alert_settings, list_policies, run_cleanup
 from sqlalchemy import select
 from utils.logging import get_logger
 
@@ -44,6 +45,33 @@ async def update_policy(
     await db.commit()
     await db.refresh(policy)
     return policy
+
+
+@router.get("/alert-settings", response_model=AlertSettingsResponse)
+async def read_alert_settings(db: AsyncSession = Depends(get_db)) -> AlertSettingsResponse:
+    settings = await get_alert_settings(db)
+    return AlertSettingsResponse(
+        consecutive_failures_threshold=settings.consecutive_failures_threshold
+    )
+
+
+@router.patch(
+    "/alert-settings",
+    response_model=AlertSettingsResponse,
+    dependencies=[Depends(RequirePermission("lifecycle.manage"))],
+)
+async def update_alert_settings(
+    payload: AlertSettingsUpdate, db: AsyncSession = Depends(get_db)
+) -> AlertSettingsResponse:
+    """Configure how many consecutive failed collections / sensor breaches are
+    required before a state alert fires (default 3)."""
+    settings = await get_alert_settings(db)
+    settings.consecutive_failures_threshold = payload.consecutive_failures_threshold
+    await db.commit()
+    await db.refresh(settings)
+    return AlertSettingsResponse(
+        consecutive_failures_threshold=settings.consecutive_failures_threshold
+    )
 
 
 @router.post(

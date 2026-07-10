@@ -64,6 +64,10 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
     # Export & audit
     PermissionDef("export.run", "Export Data", "Export", "Export inventory data"),
     PermissionDef("audit.view", "View Audit Log", "Audit", "View the audit log"),
+    # Alerts & history (1.3.0 Operations)
+    PermissionDef("alert.view", "View Alerts", "Alerts", "View the Alert Center"),
+    PermissionDef("alert.resolve", "Resolve Alerts", "Alerts", "Resolve active alerts"),
+    PermissionDef("history.view", "View Device History", "Alerts", "View the permanent device history"),
     # Access management
     PermissionDef("user.view", "View Users", "Access Management", "View users"),
     PermissionDef("user.create", "Create User", "Access Management", "Create users"),
@@ -93,9 +97,11 @@ _VIEW_ONLY = (
     "dashboard.view", "inventory.view", "cluster.view", "rack.view",
     "template.view", "device.view", "credential.view", "collector.view",
     "discovery.view", "lifecycle.view", "audit.view",
+    "alert.view", "history.view",
 )
 
 _OPERATOR = _VIEW_ONLY + (
+    "alert.resolve",
     "cluster.create", "cluster.update", "cluster.delete",
     "rack.create", "rack.update", "rack.delete", "rack.layout.edit",
     "template.create", "template.update", "template.delete",
@@ -132,6 +138,8 @@ ADMIN_GROUP_DESCRIPTION = "Built-in group granted the Administrator role."
 MENU_PERMISSIONS: tuple[dict[str, str], ...] = (
     {"key": "dashboard", "permission": "dashboard.view"},
     {"key": "inventory", "permission": "inventory.view"},
+    {"key": "alerts", "permission": "alert.view"},
+    {"key": "history", "permission": "history.view"},
     {"key": "clusters", "permission": "cluster.view"},
     {"key": "racks", "permission": "rack.view"},
     {"key": "device-templates", "permission": "template.view"},

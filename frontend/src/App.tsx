@@ -16,7 +16,9 @@ import { RoleDetailsPage } from "@/pages/admin/RoleDetailsPage";
 import { RolesPage } from "@/pages/admin/RolesPage";
 import { UserGroupsPage } from "@/pages/admin/UserGroupsPage";
 import { UserManagementPage } from "@/pages/admin/UserManagementPage";
+import { AlertsPage } from "@/pages/AlertsPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { HistoryPage } from "@/pages/HistoryPage";
 import { DeviceDetailPage } from "@/pages/DeviceDetailPage";
 import { LoginPage } from "@/pages/LoginPage";
 import { RackDetailPage } from "@/pages/RackDetailPage";
@@ -38,6 +40,22 @@ export default function App() {
           <Route element={<AppLayout />}>
             <Route path="/" element={<DashboardPage />} />
             <Route path="/search" element={<SearchPage />} />
+            <Route
+              path="/alerts"
+              element={
+                <RequirePermission permission="alert.view">
+                  <AlertsPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/history"
+              element={
+                <RequirePermission permission="history.view">
+                  <HistoryPage />
+                </RequirePermission>
+              }
+            />
             <Route path="/clusters/:clusterId" element={<RackListPage />} />
             <Route path="/racks/:rackId" element={<RackDetailPage />} />
             <Route

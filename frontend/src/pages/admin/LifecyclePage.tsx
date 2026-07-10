@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Trash2 } from "lucide-react";
+import { BellRing, Trash2 } from "lucide-react";
 import { Breadcrumb } from "@/components/Breadcrumb";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,12 +14,16 @@ const LABELS: Record<string, string> = {
   collector_runs: "Collector Run History",
   snapshots: "Inventory Snapshot History",
   discovery: "Discovery Cache",
+  resolved_alerts: "Resolved Alerts",
+  history: "Device History",
 };
 
 const DESCRIPTIONS: Record<string, string> = {
   collector_runs: "Per-device collection attempt logs.",
   snapshots: "Historical inventory snapshots. The latest per device is always kept.",
   discovery: "Discovered devices awaiting import (imported ones are never removed).",
+  resolved_alerts: "Resolved alerts only — active alerts are never removed.",
+  history: "Permanent by default. Enable only if old history may be discarded.",
 };
 
 export function LifecyclePage() {
@@ -54,6 +58,22 @@ export function LifecyclePage() {
       toast.error("Cleanup failed", err instanceof ApiError ? err.message : "Unexpected error"),
   });
 
+  const { data: alertSettings } = useQuery({
+    queryKey: ["lifecycle", "alert-settings"],
+    queryFn: api.alertSettings,
+  });
+
+  const updateThreshold = useMutation({
+    mutationFn: (threshold: number) =>
+      api.updateAlertSettings({ consecutive_failures_threshold: threshold }),
+    onSuccess: () => {
+      toast.success("Alert threshold updated");
+      void queryClient.invalidateQueries({ queryKey: ["lifecycle", "alert-settings"] });
+    },
+    onError: (err) =>
+      toast.error("Update failed", err instanceof ApiError ? err.message : "Unexpected error"),
+  });
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
@@ -63,6 +83,32 @@ export function LifecyclePage() {
           {cleanup.isPending ? "Cleaning…" : "Run Cleanup Now"}
         </Button>
       </div>
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-gray-200 bg-white p-4">
+        <BellRing className="h-6 w-6 text-blue-500" />
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-medium text-gray-900">Sensor / State Alert Threshold</p>
+          <p className="text-xs text-gray-500">
+            State alerts (device offline, sensor threshold exceeded) fire only after this
+            many consecutive failed collections or sensor breaches.
+          </p>
+        </div>
+        {alertSettings && (
+          <Input
+            type="number"
+            min={1}
+            max={100}
+            className="h-8 w-24"
+            defaultValue={alertSettings.consecutive_failures_threshold}
+            onBlur={(e) => {
+              const value = Number(e.target.value);
+              if (value >= 1 && value !== alertSettings.consecutive_failures_threshold) {
+                updateThreshold.mutate(value);
+              }
+            }}
+          />
+        )}
+      </div>
+
       <p className="text-sm text-gray-500">
         Operational history can be automatically pruned. Current inventory is
         always preserved. Enabled policies are applied automatically and on

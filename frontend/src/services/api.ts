@@ -1,12 +1,18 @@
 import { useAuthStore } from "@/stores/auth";
 import type {
+  Alert,
+  AlertPage,
+  AlertSettings,
   AuditLogPage,
+  DashboardAlerts,
+  DashboardHealth,
+  DeviceHealth,
+  HistoryPage,
   BulkDeviceResult,
   CleanupResult,
   ClusterSummary,
   DiscoveredDevice,
   DiscoveryScanResult,
-  DriftReport,
   RetentionPolicy,
   TemplateComplianceReport,
   CollectorDeviceStatus,
@@ -175,7 +181,40 @@ export const api = {
   unassignDevice: (deviceId: string) =>
     request<void>(`/devices/${deviceId}/position`, { method: "DELETE" }),
 
-  deviceDrift: (deviceId: string) => request<DriftReport>(`/devices/${deviceId}/drift`),
+  deviceHealth: (deviceId: string) =>
+    request<DeviceHealth>(`/devices/${deviceId}/health`),
+
+  // --- Operations & Alert Center (1.3.0) ---
+  alerts: (params: Record<string, string | number | undefined>) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== "") query.set(key, String(value));
+    }
+    return request<AlertPage>(`/alerts?${query.toString()}`);
+  },
+  alert: (id: string) => request<Alert>(`/alerts/${id}`),
+  resolveAlert: (id: string) =>
+    request<Alert>(`/alerts/${id}/resolve`, { method: "PATCH" }),
+
+  history: (params: Record<string, string | number | undefined>) => {
+    const query = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (value !== undefined && value !== "") query.set(key, String(value));
+    }
+    return request<HistoryPage>(`/history?${query.toString()}`);
+  },
+  deviceHistory: (deviceId: string, page = 1, pageSize = 50) =>
+    request<HistoryPage>(`/history/device/${deviceId}?page=${page}&page_size=${pageSize}`),
+
+  dashboardAlerts: () => request<DashboardAlerts>("/dashboard/alerts"),
+  dashboardHealth: () => request<DashboardHealth>("/dashboard/health"),
+
+  alertSettings: () => request<AlertSettings>("/lifecycle/alert-settings"),
+  updateAlertSettings: (payload: AlertSettings) =>
+    request<AlertSettings>("/lifecycle/alert-settings", {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    }),
 
   discoveries: () => request<DiscoveredDevice[]>("/discovery"),
   discoveryScan: (payload: { targets: string[]; community: string; timeout?: number }) =>

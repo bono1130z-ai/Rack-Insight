@@ -1,5 +1,130 @@
 # Release Notes
 
+## 1.3.0 (2026-07-10) — Operations & Alert Center
+
+A major release: Rack Insight becomes an **Operations Platform**. The primary
+screen is no longer inventory management — administrators immediately see
+operational issues, hardware changes and server health. Fully backward
+compatible with 1.2.x: no existing API changed, one additive migration (0010),
+existing inventory tables untouched.
+
+### Architecture
+
+    Collector -> Inventory Snapshot -> Event Engine -> Alert Engine -> Frontend
+
+- **Collector** only collects inventory and saves a snapshot (the existing
+  immutable `snapshots` store — one snapshot per successful collection — plus
+  its per-section inventory tables is the snapshot store; nothing was
+  duplicated). The collector never creates alerts.
+- **SnapshotService** (`services/snapshot_service.py`) is the single entry
+  point for a collection cycle; both manual refresh and the background
+  scheduler run through it.
+- **Event Engine** (`services/event_engine.py`) is the only producer of
+  Events. It always compares snapshot **N-1 vs N** — never live inventory,
+  never the whole history — and detects meaningful changes plus state
+  transitions. Event types are extensible strings:
+  `HardwareChanged`, `FirmwareChanged`, `DeviceOffline`, `DeviceRecovered`,
+  `SensorThresholdExceeded`, `SensorRecovered`, `CollectorFailed`,
+  `CredentialFailed`, `NetworkReachabilityChanged`.
+- **Alert Engine** (`services/alert_engine.py`) converts Events into Alerts
+  (one event -> one alert), deduplicates active state alerts, resolves state
+  alerts automatically when the next collection shows normal state, and keeps
+  Hardware/Firmware alerts ACTIVE until an administrator resolves them.
+
+### Hardware change policy
+
+Alerts fire only for meaningful inventory changes: CPU replaced, memory
+capacity/DIMM changed, disk added/removed, NIC added/removed, management
+controller / PSU firmware changed, firmware versions changed. Sensor value
+fluctuations (temperature, fan RPM, voltage, power draw) and BIOS settings
+never create change alerts — sensors belong to Health only.
+
+### Alerts
+
+- Severity INFO / WARNING / CRITICAL; status ACTIVE / RESOLVED.
+- Hardware/Firmware alerts: manual resolve (recorded in history).
+  State alerts: auto-resolve on recovery (`resolved_by: system`).
+- Offline detection uses a **configurable consecutive-failure threshold**
+  (default 3, Lifecycle page). Credential failures alert immediately.
+- Recovery events produce an already-RESOLVED INFO alert so the timeline stays
+  complete without lingering noise.
+
+### Device History (permanent)
+
+Immutable `device_history` records: firmware upgrades, hardware replacements,
+collector failures, recoveries, manual resolves. History is never updated and
+never disappears — deletion requires explicitly enabling the (default-off)
+`history` retention policy.
+
+### Health model
+
+- New `GET /api/devices/{id}/health`: overall health, sensor groups
+  (temperature / power / fan / other), storage / memory / network health
+  (Healthy / Warning / Critical / Unknown), and a health timeline across
+  recent snapshots.
+- Device Detail gains a **Health** tab (sensor cards + timeline); the old
+  Sensor tab lives inside it. Sensor breaches only alert after N consecutive
+  collections (lifecycle policy).
+
+### Lifecycle policy extensions
+
+- `GET/PATCH /api/lifecycle/alert-settings`: consecutive-failure threshold.
+- New retention categories: `resolved_alerts` (only RESOLVED alerts are ever
+  pruned) and `history` (ships **disabled = permanent**).
+
+### Alert Center UI
+
+- New top-level **Alerts** sidebar section: **Alerts** and **History** pages.
+- Alert table: Severity, Status, Category, Cluster, Rack, Hostname, Message,
+  Created, Resolved — with filters (severity, status, cluster, vendor, model,
+  hostname, date range, category, search), newest first, pagination. Clicking
+  an alert opens Device Detail; a change icon opens the Diff Viewer.
+- **Notification bell** in the header (UI only — no email/Slack/Teams/SMS):
+  unread count, click opens the Alert Center.
+- **Diff Viewer**: visual before -> after for hardware/firmware changes,
+  reused across the Alert Center, Dashboard and Device History.
+
+### Dashboard (operations-first)
+
+Top cards: Critical / Warning / Info alerts, Offline devices, Healthy
+devices. Latest Alerts, Critical Devices, Recent hardware changes, Recent
+firmware changes. Cluster -> Rack -> Device browsing remains unchanged below.
+
+### Device Detail
+
+Tabs are now Overview / **Health** / Hardware / Firmware / Network / Storage /
+VM / **History**. Overview adds Last Alert + Last Firmware version. The
+**Drift UI is removed** — hardware changes are Alerts, and History stores the
+permanent record (the `/api/devices/{id}/drift` endpoint remains for API
+compatibility).
+
+### API additions
+
+`GET /api/alerts`, `GET /api/alerts/{id}`, `PATCH /api/alerts/{id}/resolve`,
+`GET /api/history`, `GET /api/history/device/{id}`,
+`GET /api/dashboard/alerts`, `GET /api/dashboard/health`,
+`GET /api/devices/{id}/health`, `GET/PATCH /api/lifecycle/alert-settings`.
+New permissions `alert.view`, `alert.resolve`, `history.view` are seeded into
+the system roles automatically (Viewer: view-only; Operator: +resolve).
+
+### Performance
+
+The Event Engine compares exactly two consecutive snapshots; history records
+are generated once. Indexes on `device_id`, `snapshot_id`, alert `status`,
+`severity` and `created_at` (migration 0010).
+
+### Migration notes (1.2.x -> 1.3.0)
+
+- `docker compose up -d` applies migration 0010 automatically at startup.
+- The existing `snapshots` + per-section inventory tables serve as the
+  inventory snapshot store (`inventory_snapshots`/`inventory_snapshot_items`
+  in the spec); no data is duplicated and nothing is renamed.
+- The background scheduler now retries **all enabled devices** (previously
+  only ONLINE ones) so offline devices can auto-recover and their alerts
+  auto-resolve.
+- Alerts/history start empty; events are generated from the first collection
+  after the upgrade.
+
 ## 1.2.2 (2026-07-10) — Administration UX & Navigation
 
 A UX and navigation release that simplifies administration for large

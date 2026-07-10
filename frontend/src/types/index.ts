@@ -228,22 +228,6 @@ export interface DiscoveryScanResult {
   discovered: DiscoveredDevice[];
 }
 
-export interface DriftChange {
-  section: string;
-  identifier: string;
-  change: "added" | "removed" | "changed";
-  field: string | null;
-  old_value: string | null;
-  new_value: string | null;
-}
-
-export interface DriftReport {
-  has_previous: boolean;
-  current_collected_at: string | null;
-  previous_collected_at: string | null;
-  changes: DriftChange[];
-}
-
 export interface DeviceComponentStatus {
   device_id: string;
   hostname: string;
@@ -305,6 +289,120 @@ export interface DashboardSummary {
   critical: number;
   offline: number;
   unknown: number;
+}
+
+// --- Operations & Alert Center (1.3.0) ---
+export type AlertSeverity = "INFO" | "WARNING" | "CRITICAL";
+export type AlertStatus = "ACTIVE" | "RESOLVED";
+export type HealthLabel = "Healthy" | "Warning" | "Critical" | "Unknown";
+
+export interface ChangeItem {
+  section: string;
+  identifier: string;
+  change: "added" | "removed" | "changed";
+  field: string | null;
+  old: string | null;
+  new: string | null;
+}
+
+export interface Alert {
+  id: string;
+  device_id: string;
+  hostname: string;
+  display_name: string | null;
+  vendor: string | null;
+  model: string | null;
+  rack_id: string | null;
+  rack_name: string | null;
+  cluster_id: string | null;
+  cluster_name: string | null;
+  category: string;
+  severity: AlertSeverity;
+  status: AlertStatus;
+  subject: string | null;
+  message: string;
+  changes: ChangeItem[];
+  details: Record<string, unknown> | null;
+  auto_resolve: boolean;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+}
+
+export interface AlertPage {
+  items: Alert[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface HistoryEntry {
+  id: string;
+  device_id: string;
+  hostname: string | null;
+  kind: string;
+  title: string;
+  changes: ChangeItem[];
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
+export interface HistoryPage {
+  items: HistoryEntry[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface DashboardAlerts {
+  active_critical: number;
+  active_warning: number;
+  active_info: number;
+  offline_devices: number;
+  healthy_devices: number;
+  latest_alerts: Alert[];
+  critical_devices: Alert[];
+  recent_hardware_changes: HistoryEntry[];
+  recent_firmware_changes: HistoryEntry[];
+}
+
+export interface DashboardHealth {
+  healthy: number;
+  warning: number;
+  critical: number;
+  unknown: number;
+  offline: number;
+  total: number;
+}
+
+export interface SensorGroupSummary {
+  group: string;
+  total: number;
+  ok: number;
+  breached: number;
+  label: HealthLabel;
+}
+
+export interface HealthTimelinePoint {
+  collected_at: string;
+  score: number;
+  label: string;
+}
+
+export interface DeviceHealth {
+  overall_label: HealthLabel;
+  overall_score: number | null;
+  status: string;
+  last_collected_at: string | null;
+  sensor_groups: SensorGroupSummary[];
+  storage_label: HealthLabel;
+  memory_label: HealthLabel;
+  network_label: HealthLabel;
+  timeline: HealthTimelinePoint[];
+}
+
+export interface AlertSettings {
+  consecutive_failures_threshold: number;
 }
 
 export interface CollectorDeviceStatus {

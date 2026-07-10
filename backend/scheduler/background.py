@@ -1,17 +1,21 @@
 """Background scheduler: every N seconds (default 30 min) re-collect all
-enabled, online devices so the UI stays current without user action."""
+enabled devices so the UI stays current without user action.
+
+Since 1.3.0 the scheduler runs the full snapshot pipeline (collect -> snapshot
+-> event engine -> alert engine), and it also retries devices that are not
+ONLINE — otherwise offline devices could never auto-recover (and their state
+alerts could never auto-resolve) without a manual refresh."""
 import asyncio
 
 from sqlalchemy import select
 
 from cache.redis_cache import cache_set, device_inventory_key
-from collectors.manager import CollectorManager
 from config import get_settings
 from database import async_session_factory
-from models import Device, DeviceStatus
+from models import Device
 from services.inventory_service import load_snapshot_inventory
 from services.lifecycle_service import run_cleanup
-from services.refresh_service import record_collector_run
+from services.snapshot_service import collect_and_process
 from utils.logging import get_logger
 
 logger = get_logger(__name__)
@@ -19,24 +23,19 @@ logger = get_logger(__name__)
 _task: asyncio.Task[None] | None = None
 
 
-async def _collect_all_online() -> None:
-    manager = CollectorManager()
+async def _collect_all_enabled() -> None:
     async with async_session_factory() as db:
-        result = await db.execute(
-            select(Device).where(
-                Device.enabled.is_(True), Device.status == DeviceStatus.ONLINE
-            )
-        )
+        result = await db.execute(select(Device).where(Device.enabled.is_(True)))
         devices = list(result.scalars().all())
-        logger.info("Scheduler run: %d online devices", len(devices))
+        logger.info("Scheduler run: %d enabled devices", len(devices))
         for device in devices:
             try:
-                outcome = await manager.collect_device(db, device)
-                record_collector_run(db, device, outcome, trigger="scheduled")
-                device.status = outcome.status
+                pipeline = await collect_and_process(db, device, trigger="scheduled")
                 await db.commit()
-                if outcome.snapshot is not None:
-                    inventory = await load_snapshot_inventory(db, outcome.snapshot)
+                if pipeline.outcome.snapshot is not None:
+                    inventory = await load_snapshot_inventory(
+                        db, pipeline.outcome.snapshot
+                    )
                     await cache_set(
                         device_inventory_key(str(device.id)),
                         inventory.model_dump(mode="json"),
@@ -56,7 +55,7 @@ async def _loop() -> None:
     while True:
         await asyncio.sleep(settings.scheduler_interval_seconds)
         try:
-            await _collect_all_online()
+            await _collect_all_enabled()
         except Exception:
             logger.exception("Scheduler iteration failed")
         try:
