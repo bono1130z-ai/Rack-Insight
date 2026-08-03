@@ -3,6 +3,39 @@
 All notable changes to Rack Insight. See `docs/RELEASE_NOTES.md` for the full
 notes of each release.
 
+## [1.3.1] - 2026-07-10 — Alert Engine responsibility split
+
+Maintainability patch. Same architecture and behaviour as 1.3.0; the Alert
+Engine is now a thin orchestrator with the business rules extracted into small
+pure helpers. Additive migration 0011; backward compatible.
+
+### Added
+- **AlertPolicy** (`services/alert_policy.py`) — pure mapping from an Event to
+  its alert behaviour (category, severity, auto-resolve). No DB, no side
+  effects; future severity rules have a single home.
+- **AlertBuilder** (`services/alert_builder.py`) — constructs the Alert model
+  only. No resolve/dedupe/history/DB access.
+- **Alert category** now distinct from event type: `Alert.event_type` (what
+  happened) + `Alert.category` (operational domain: Hardware, Firmware,
+  Connectivity, Collector, Credential, Health). The UI filters by category; the
+  event type is shown per row. Alerts API gains an `event_type` filter and
+  returns both fields.
+- **Event.subject** — the Event Engine records what changed (sensor name, DIMM
+  slot, firmware component…); the Alert Engine reuses it instead of parsing
+  JSON details.
+
+### Changed
+- Alert Engine reduced to orchestration: persist events → resolve counterparts
+  → dedupe → AlertPolicy → AlertBuilder → persist → record history. Lifecycle
+  queries key off `event_type` (was `category`).
+- Migration 0011 backfills existing alerts (`event_type = category`, then
+  reclassifies `category` to the operational domain).
+
+### Preserved
+- One event → one alert; recovery events create already-resolved INFO alerts;
+  Hardware/Firmware alerts require manual resolve; state alerts auto-resolve;
+  active state alerts deduplicated; history immutable; existing APIs unchanged.
+
 ## [1.3.0] - 2026-07-10 — Operations & Alert Center
 
 ### Added

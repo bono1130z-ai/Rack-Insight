@@ -26,6 +26,9 @@ class AlertResponse(BaseModel):
     rack_name: str | None
     cluster_id: uuid.UUID | None
     cluster_name: str | None
+    # event_type = what happened; category = operational domain (UI filters by
+    # category). See services.alert_policy.
+    event_type: str
     category: str
     severity: str
     status: str

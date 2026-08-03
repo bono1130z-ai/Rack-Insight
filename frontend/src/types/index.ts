@@ -316,6 +316,7 @@ export interface Alert {
   rack_name: string | null;
   cluster_id: string | null;
   cluster_name: string | null;
+  event_type: string;
   category: string;
   severity: AlertSeverity;
   status: AlertStatus;

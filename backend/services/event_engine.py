@@ -262,6 +262,7 @@ def _make_event(
     previous_snapshot_id: uuid.UUID | None = None,
     changes: list[ChangeItem] | None = None,
     extra: dict[str, Any] | None = None,
+    subject: str | None = None,
 ) -> Event:
     details: Any = None
     if changes is not None:
@@ -272,6 +273,9 @@ def _make_event(
         device_id=device.id,
         event_type=event_type,
         severity=severity,
+        # The Event Engine knows what changed, so it records the subject here
+        # (the Alert Engine reuses it instead of re-parsing the JSON details).
+        subject=subject,
         message=message,
         snapshot_id=snapshot_id,
         previous_snapshot_id=previous_snapshot_id,
@@ -374,6 +378,7 @@ async def generate_events(
                     snapshot_id=snapshot.id,
                     previous_snapshot_id=prev_snap.id,
                     changes=changes,
+                    subject=section,
                 )
             )
         if firmware:
@@ -387,6 +392,7 @@ async def generate_events(
                     snapshot_id=snapshot.id,
                     previous_snapshot_id=prev_snap.id,
                     changes=firmware,
+                    subject=", ".join(components[:3]) or None,
                 )
             )
 
@@ -432,6 +438,7 @@ async def generate_events(
                     f"for {threshold} consecutive collections "
                     f"(value: {sensor.value or 'n/a'}{sensor.unit or ''})",
                     snapshot_id=snapshot.id,
+                    subject=name,
                     extra={
                         "sensor": name,
                         "value": sensor.value,
@@ -450,6 +457,7 @@ async def generate_events(
                 device, EVENT_SENSOR_RECOVERED, SEVERITY_INFO,
                 f"Sensor '{name}' on {device.hostname} returned to normal",
                 snapshot_id=snapshot.id,
+                subject=name,
                 extra={"sensor": name},
             )
         )

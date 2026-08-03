@@ -20,16 +20,15 @@ import { markAlertsSeen } from "@/stores/alertsSeen";
 import { toast } from "@/stores/toast";
 import type { Alert } from "@/types";
 
+// Operational domains (Alert.category), the axis the UI filters by. The
+// underlying event type (what happened) is shown per-row as a subtitle.
 const CATEGORIES = [
-  "HardwareChanged",
-  "FirmwareChanged",
-  "DeviceOffline",
-  "DeviceRecovered",
-  "SensorThresholdExceeded",
-  "SensorRecovered",
-  "CollectorFailed",
-  "CredentialFailed",
-  "NetworkReachabilityChanged",
+  "Hardware",
+  "Firmware",
+  "Connectivity",
+  "Collector",
+  "Credential",
+  "Health",
 ];
 
 const PAGE_SIZE = 25;
@@ -217,7 +216,10 @@ export function AlertsPage() {
                     <AlertStatusBadge status={alert.status} />
                   </TD>
                   <TD>
-                    <Badge variant="muted">{alert.category}</Badge>
+                    <div className="flex flex-col gap-0.5">
+                      <Badge variant="muted">{alert.category}</Badge>
+                      <span className="text-[11px] text-gray-400">{alert.event_type}</span>
+                    </div>
                   </TD>
                   <TD>{alert.cluster_name ?? "-"}</TD>
                   <TD>{alert.rack_name ?? "-"}</TD>

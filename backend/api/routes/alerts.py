@@ -67,6 +67,7 @@ def _serialize_alert(
         rack_name=rack.name if rack else None,
         cluster_id=cluster.id if cluster else None,
         cluster_name=cluster.name if cluster else None,
+        event_type=alert.event_type,
         category=alert.category,
         severity=alert.severity,
         status=alert.status,
@@ -98,7 +99,8 @@ def _alert_join_query():
 async def list_alerts(
     severity: str | None = None,
     alert_status: str | None = Query(default=None, alias="status"),
-    category: str | None = None,
+    category: str | None = Query(default=None, description="Operational domain"),
+    event_type: str | None = Query(default=None, description="What happened"),
     cluster_id: uuid.UUID | None = None,
     rack_id: uuid.UUID | None = None,
     vendor: str | None = None,
@@ -118,6 +120,8 @@ async def list_alerts(
         query = query.where(Alert.status == alert_status.upper())
     if category:
         query = query.where(Alert.category == category)
+    if event_type:
+        query = query.where(Alert.event_type == event_type)
     if cluster_id is not None:
         query = query.where(Cluster.id == cluster_id)
     if rack_id is not None:

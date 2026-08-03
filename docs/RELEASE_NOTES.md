@@ -1,5 +1,64 @@
 # Release Notes
 
+## 1.3.1 (2026-07-10) — Alert Engine responsibility split
+
+A maintainability patch on the 1.3.0 Alert Engine. The architecture is
+unchanged (Collector → Snapshot → Event Engine → Alert Engine → History) and no
+behaviour changes; the Alert Engine simply stops owning every responsibility.
+One additive migration (0011); fully backward compatible.
+
+### What moved out of the Alert Engine
+
+- **AlertPolicy** (`services/alert_policy.py`) — given an Event, returns the
+  alert **category**, **severity**, and **auto-resolve** flag. Pure: no
+  database, no alert creation/resolution, no history. Future rules (e.g.
+  `FirmwareChanged → WARNING`, `CollectorFailed → CRITICAL after N failures`)
+  now have one obvious home in `_resolve_severity` without touching callers.
+- **AlertBuilder** (`services/alert_builder.py`) — constructs the `Alert`
+  model from `(event, device, policy)` and nothing else. Never resolves,
+  deduplicates, writes history, or hits the database. Every alert is built
+  ACTIVE; the engine decides whether to immediately resolve it.
+- **Subject** now lives on the **Event**. The Event Engine knows what changed
+  (sensor name, DIMM slot, firmware component, NIC…) and records
+  `Event.subject`; the Alert Engine reuses `event.subject` instead of parsing
+  the JSON details.
+
+### Alert Category vs Event Type
+
+`Event.event_type` is *what happened*; `Alert.category` is now the *operational
+domain* the UI groups by:
+
+| Event type(s)                                   | Category      |
+|-------------------------------------------------|---------------|
+| HardwareChanged                                 | Hardware      |
+| FirmwareChanged                                 | Firmware      |
+| DeviceOffline, DeviceRecovered, NetworkReachabilityChanged | Connectivity |
+| CollectorFailed                                 | Collector     |
+| CredentialFailed                                | Credential    |
+| SensorThresholdExceeded, SensorRecovered        | Health        |
+
+`Alert` now stores **both** `event_type` and `category`. The Alert Center
+filters by category (with the event type shown per row); the alerts API keeps
+the `category` filter (now the domain) and adds an `event_type` filter. The
+alert lifecycle (resolution, dedupe, escalation) keys off `event_type`.
+
+### The slimmed Alert Engine
+
+`process_events` now reads as its responsibilities: persist events → resolve
+counterparts (recovery/escalation) → deduplicate active state alerts → ask
+AlertPolicy → build with AlertBuilder → persist → record immutable history.
+
+### Migration notes (1.3.0 → 1.3.1)
+
+- Migration 0011 is additive: adds `events.subject` and `alerts.event_type`
+  (indexed), and backfills existing alerts (`event_type = category`, then
+  reclassifies `category` to the operational domain). `docker compose up -d`
+  applies it automatically.
+- Behaviour preserved exactly: one event → one alert, recovery events create
+  already-resolved INFO alerts, Hardware/Firmware alerts require manual
+  resolve, state alerts auto-resolve, active state alerts are deduplicated,
+  history is immutable, and all existing endpoints keep working.
+
 ## 1.3.0 (2026-07-10) — Operations & Alert Center
 
 A major release: Rack Insight becomes an **Operations Platform**. The primary

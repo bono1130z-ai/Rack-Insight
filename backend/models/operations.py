@@ -38,9 +38,21 @@ SEVERITY_CRITICAL = "CRITICAL"
 ALERT_ACTIVE = "ACTIVE"
 ALERT_RESOLVED = "RESOLVED"
 
-# Categories whose alerts resolve automatically when the next collection shows
+# --- Alert categories (operational domain, distinct from event type) ---------
+# Event Type = what happened; Alert Category = the operational domain the UI
+# groups/filters by. The mapping lives in services.alert_policy.
+CATEGORY_HARDWARE = "Hardware"
+CATEGORY_FIRMWARE = "Firmware"
+CATEGORY_CONNECTIVITY = "Connectivity"
+CATEGORY_COLLECTOR = "Collector"
+CATEGORY_CREDENTIAL = "Credential"
+CATEGORY_HEALTH = "Health"
+CATEGORY_OTHER = "Other"
+
+# Event types whose alerts resolve automatically when the next collection shows
 # normal state. Hardware/Firmware alerts stay ACTIVE until manually resolved.
-AUTO_RESOLVE_CATEGORIES = frozenset(
+# (These are event types, not the operational categories above.)
+AUTO_RESOLVE_EVENT_TYPES = frozenset(
     {
         EVENT_DEVICE_OFFLINE,
         EVENT_SENSOR_THRESHOLD_EXCEEDED,
@@ -49,6 +61,8 @@ AUTO_RESOLVE_CATEGORIES = frozenset(
         EVENT_NETWORK_REACHABILITY_CHANGED,
     }
 )
+# Backwards-compatible alias (the pre-1.3.1 name).
+AUTO_RESOLVE_CATEGORIES = AUTO_RESOLVE_EVENT_TYPES
 
 # --- Device history kinds -----------------------------------------------------
 HISTORY_FIRMWARE_CHANGE = "firmware_change"
@@ -71,6 +85,10 @@ class Event(TimestampedModel):
     )
     event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     severity: Mapped[str] = mapped_column(String(16), nullable=False)
+    # What actually changed (sensor name, DIMM slot, firmware component, NIC…),
+    # set by the Event Engine. The Alert Engine reuses it verbatim and never
+    # re-derives it from the JSON details.
+    subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
     message: Mapped[str] = mapped_column(Text, nullable=False)
     # Snapshot N (and N-1) that produced this event; SET NULL keeps the event
     # meaningful even after snapshot retention removes old snapshots.
@@ -98,6 +116,12 @@ class Alert(TimestampedModel):
         nullable=False,
         index=True,
     )
+    # What happened (mirrors Event.event_type), kept alongside the operational
+    # category so the lifecycle logic keys off the event type while the UI
+    # filters by category.
+    event_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    # Operational domain the UI groups by (Hardware, Firmware, Connectivity…),
+    # determined by AlertPolicy — no longer equal to event_type.
     category: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     severity: Mapped[str] = mapped_column(String(16), nullable=False, index=True)
     status: Mapped[str] = mapped_column(

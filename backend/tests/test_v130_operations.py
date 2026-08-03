@@ -149,12 +149,19 @@ async def test_firmware_change_creates_manual_resolve_alert(client, device_id) -
     alerts = (await client.get("/api/alerts")).json()
     assert alerts["total"] == 1
     alert = alerts["items"][0]
-    assert alert["category"] == "FirmwareChanged"
+    # event_type = what happened; category = operational domain (1.3.1).
+    assert alert["event_type"] == "FirmwareChanged"
+    assert alert["category"] == "Firmware"
+    assert alert["subject"] == "BIOS"
     assert alert["severity"] == "INFO"
     assert alert["status"] == "ACTIVE"
     assert alert["auto_resolve"] is False
     change = alert["changes"][0]
     assert (change["old"], change["new"]) == ("2.10", "2.30")
+
+    # Filtering by operational category (domain) works.
+    assert (await client.get("/api/alerts?category=Firmware")).json()["total"] == 1
+    assert (await client.get("/api/alerts?category=Hardware")).json()["total"] == 0
 
     # Firmware alerts survive further normal collections (manual resolve only).
     await _refresh(
@@ -185,12 +192,17 @@ async def test_memory_change_creates_hardware_alert(client, device_id) -> None:
         client, device_id,
         {**BASELINE, "memories": [{"slot": "DIMM1", "capacity_gb": 512}]},
     )
-    alerts = (await client.get("/api/alerts?category=HardwareChanged")).json()
+    alerts = (await client.get("/api/alerts?event_type=HardwareChanged")).json()
     assert alerts["total"] == 1
     alert = alerts["items"][0]
+    assert alert["event_type"] == "HardwareChanged"
+    assert alert["category"] == "Hardware"
+    assert alert["subject"] == "Memory"
     assert alert["severity"] == "WARNING"
     assert alert["changes"][0]["section"] == "Memory"
     assert (alert["changes"][0]["old"], alert["changes"][0]["new"]) == ("256", "512")
+    # Category (domain) groups the underlying event type.
+    assert (await client.get("/api/alerts?category=Hardware")).json()["total"] == 1
 
 
 @pytest.mark.asyncio
@@ -200,7 +212,7 @@ async def test_offline_alert_after_threshold_and_auto_recovery(client, device_id
     # Failure 1 -> CollectorFailed WARNING (below offline threshold of 3).
     assert await _refresh(client, device_id, {"fail": True}) == 502
     alerts = (await client.get("/api/alerts?status=ACTIVE")).json()
-    assert [a["category"] for a in alerts["items"]] == ["CollectorFailed"]
+    assert [a["event_type"] for a in alerts["items"]] == ["CollectorFailed"]
 
     # Failure 2 -> deduplicated, still a single active alert.
     await _refresh(client, device_id, {"fail": True})
@@ -210,17 +222,17 @@ async def test_offline_alert_after_threshold_and_auto_recovery(client, device_id
     # Failure 3 -> DeviceOffline CRITICAL; CollectorFailed is superseded.
     await _refresh(client, device_id, {"fail": True})
     active = (await client.get("/api/alerts?status=ACTIVE")).json()
-    assert [a["category"] for a in active["items"]] == ["DeviceOffline"]
+    assert [a["event_type"] for a in active["items"]] == ["DeviceOffline"]
     assert active["items"][0]["severity"] == "CRITICAL"
 
     # Next successful collection -> automatic resolution + recovery record.
     await _refresh(client, device_id, BASELINE)
     active = (await client.get("/api/alerts?status=ACTIVE")).json()
     assert active["total"] == 0
-    offline = (await client.get("/api/alerts?category=DeviceOffline")).json()
+    offline = (await client.get("/api/alerts?event_type=DeviceOffline")).json()
     assert offline["items"][0]["status"] == "RESOLVED"
     assert offline["items"][0]["resolved_by"] == "system"
-    recovered = (await client.get("/api/alerts?category=DeviceRecovered")).json()
+    recovered = (await client.get("/api/alerts?event_type=DeviceRecovered")).json()
     assert recovered["total"] == 1
     assert recovered["items"][0]["status"] == "RESOLVED"
 
@@ -230,7 +242,7 @@ async def test_credential_failure_alerts_immediately(client, device_id) -> None:
     await _refresh(client, device_id, BASELINE)
     await _refresh(client, device_id, {"fail": True, "error_code": ERROR_AUTH_FAILED})
     active = (await client.get("/api/alerts?status=ACTIVE")).json()
-    assert [a["category"] for a in active["items"]] == ["CredentialFailed"]
+    assert [a["event_type"] for a in active["items"]] == ["CredentialFailed"]
 
 
 @pytest.mark.asyncio
@@ -249,13 +261,13 @@ async def test_sensor_threshold_lifecycle(client, device_id) -> None:
     }
     await _refresh(client, device_id, BASELINE)
     await _refresh(client, device_id, breached)  # 1st breach: no alert yet
-    assert (await client.get("/api/alerts?category=SensorThresholdExceeded")).json()[
+    assert (await client.get("/api/alerts?event_type=SensorThresholdExceeded")).json()[
         "total"
     ] == 0
 
     await _refresh(client, device_id, breached)  # 2nd consecutive breach: alert
     sensor_alerts = (
-        await client.get("/api/alerts?category=SensorThresholdExceeded")
+        await client.get("/api/alerts?event_type=SensorThresholdExceeded")
     ).json()
     assert sensor_alerts["total"] == 1
     assert sensor_alerts["items"][0]["severity"] == "CRITICAL"
@@ -263,10 +275,10 @@ async def test_sensor_threshold_lifecycle(client, device_id) -> None:
 
     await _refresh(client, device_id, BASELINE)  # back to normal: auto-resolve
     sensor_alerts = (
-        await client.get("/api/alerts?category=SensorThresholdExceeded")
+        await client.get("/api/alerts?event_type=SensorThresholdExceeded")
     ).json()
     assert sensor_alerts["items"][0]["status"] == "RESOLVED"
-    recovered = (await client.get("/api/alerts?category=SensorRecovered")).json()
+    recovered = (await client.get("/api/alerts?event_type=SensorRecovered")).json()
     assert recovered["total"] == 1
 
 
