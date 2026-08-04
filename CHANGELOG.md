@@ -3,6 +3,39 @@
 All notable changes to Rack Insight. See `docs/RELEASE_NOTES.md` for the full
 notes of each release.
 
+## [Unreleased] — Kubernetes / ArgoCD deployment architecture
+
+Deployment-architecture migration only — **no application code, API, DB schema,
+RBAC, alert, collector, inventory, or plugin-contract changes.** The app version
+is deliberately not bumped.
+
+### Added
+- **Kustomize manifests** (`deploy/kubernetes/base` + `overlays/testbed`):
+  namespace, ConfigMap, `secret.example.yaml`, plugins ConfigMap, PostgreSQL
+  StatefulSet + PVC + headless Service, Redis Deployment + Service, backend
+  Deployment + Service (probes on `/api/health`, DB-wait init container,
+  plugins ConfigMap mount), frontend Deployment + Service (probes on `/`),
+  example-plugin Deployment + Service, and an Ingress replacing the compose
+  reverse-proxy routing (`/api`,`/docs`,`/openapi.json`→backend, `/`→frontend).
+- **ArgoCD Application** (`deploy/argocd/application.yaml`) tracking **main only**
+  at the testbed overlay (no ApplicationSet / PR preview).
+- **CI/CD** (`.github/workflows/ci.yml`): PRs build+test; pushes to main build &
+  push commit-SHA-tagged images and GitOps-bump the overlay tags (immutable
+  tags — never `:latest`).
+- **Optional** in-cluster redfish-proxy template (`deploy/kubernetes/optional/`),
+  not part of the base build.
+- Docs: `docs/kubernetes-deployment.md`; README rewritten around the new
+  Local-dev (Compose) vs Testbed (Kubernetes/ArgoCD) model; plugin guide updated
+  with the GitOps plugin lifecycle.
+
+### Changed
+- Kustomize chosen over Helm (built into kubectl + ArgoCD, no chart repo →
+  air-gap friendly); base+overlays for environment separation.
+- Docker Compose reframed as **local development only** (relabeled header + docs);
+  Kubernetes is the official testbed/production runtime.
+- Service DNS names (`postgres`, `redis`, `example-plugin`) match the app's
+  existing env defaults, so **no application code changed** for k8s.
+
 ## [1.4.0] - 2026-07-10 — Plugin Architecture Foundation
 
 Foundation for extending Rack Insight with independent plugin backends without

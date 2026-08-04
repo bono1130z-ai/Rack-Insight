@@ -1,10 +1,13 @@
-# Rack Insight — runtime compose file (air-gap friendly).
+# Rack Insight — LOCAL DEVELOPMENT compose file.
 #
-# This file references pre-built images only (no build:), so
-# `docker compose up -d` works with zero internet access once the images
-# have been loaded via `docker load` (see README "Offline Deployment").
+# This is the fast local inner-loop for backend/frontend development. It is NOT
+# the official deployment mechanism: the testbed and production run on
+# Kubernetes + ArgoCD (see deploy/kubernetes/ and docs/kubernetes-deployment.md).
 #
-# To build the images on an internet-connected machine, use the override:
+# It references pre-built images only (no build:), so `docker compose up -d`
+# works with zero internet access once images have been loaded via `docker load`
+# (see README "Offline images"). To build images on an internet-connected
+# machine, use the override:
 #   docker compose -f docker-compose.yml -f docker-compose.build.yml build
 services:
   postgres:

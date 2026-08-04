@@ -53,7 +53,8 @@ tar -czf "${DEPLOY_ARCHIVE}" -C "${REPO_ROOT}" \
   docker-compose.yml \
   docker/nginx/default.conf \
   deploy/plugins.json \
-  deploy/kubernetes/example-plugin.yaml \
+  deploy/kubernetes \
+  deploy/argocd \
   backend/.env.example \
   scripts/offline/load_images.sh \
   README.md

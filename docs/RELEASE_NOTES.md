@@ -1,5 +1,46 @@
 # Release Notes
 
+## Unreleased — Kubernetes / ArgoCD Deployment Architecture
+
+A **deployment-architecture migration**: the official testbed/production runtime
+moves from Docker Compose to **Kubernetes + ArgoCD (GitOps)**. This is
+infrastructure only — **no application logic, API, DB schema, RBAC, alert,
+collector, inventory or plugin-contract change**, so the app version is not
+bumped and all existing functionality is preserved.
+
+### What changed
+
+- **Kustomize** manifests under `deploy/kubernetes/` (`base` + `overlays/testbed`)
+  for every component: frontend, backend, PostgreSQL (StatefulSet + PVC), Redis,
+  example-plugin, plus an **Ingress** that replaces the Docker-Compose nginx
+  reverse proxy (`/api`,`/docs`,`/openapi.json` → backend; `/` → frontend).
+- **ArgoCD Application** tracking **`main` only** (`deploy/argocd/application.yaml`);
+  feature branches are CI-tested but never auto-deployed.
+- **CI/CD** (`.github/workflows/ci.yml`): PR → build+test; main → build & push
+  **immutable commit-SHA-tagged** images, then a GitOps commit bumps the overlay
+  tags so ArgoCD rolls the cluster forward. `:latest` is never used.
+- **Docker Compose** is retained strictly for **local development**; Kubernetes
+  is the official deployment path.
+- Health probes use the app's real endpoints (`/api/health`, `/`, `/healthz`,
+  `/readyz`, `pg_isready`, `redis-cli ping`). Service-to-service traffic uses
+  Kubernetes Service DNS; because those names match the app's existing env
+  defaults (`postgres`, `redis`), **no application code changed**.
+- New guide `docs/kubernetes-deployment.md` (config reference, immutable image
+  flow, air-gap, troubleshooting); README rewritten around the new model; the
+  plugin guide gained the end-to-end GitOps plugin lifecycle.
+
+### Why Kustomize (not Helm)
+
+Built into `kubectl` and natively supported by ArgoCD — no extra binary or chart
+repository, which suits **air-gapped** clusters. `base` + `overlays` give clean
+per-environment separation (testbed / production / air-gapped).
+
+### Compatibility
+
+Fully backward compatible. The same container images run under both Docker
+Compose (local) and Kubernetes (testbed/production). Migrations still apply
+automatically on backend startup.
+
 ## 1.4.0 (2026-07-10) — Plugin Architecture Foundation
 
 Establishes the official **Plugin Extension Point**: a new team member can build

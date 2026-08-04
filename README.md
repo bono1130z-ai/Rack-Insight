@@ -7,28 +7,83 @@ Cisco switches in a datacenter / core-network server room — Rack, Cluster,
 Server, Switch, Hardware, Firmware, Network and VM information in one GUI,
 without touching iLO or SSH by hand.
 
-## Quick Start
+## Deployment model
 
-`docker-compose.yml` references **pre-built images only** (no `build:`), so the
-images must exist locally first — either built on this machine (internet
-required, one time) or loaded from an offline archive (see
-[Offline Deployment](#offline-air-gapped-deployment)):
+The official testbed / production runtime is **Kubernetes, deployed via GitOps
+with ArgoCD**. **Docker Compose is kept for local development only.**
+
+```
+Developer ─► feature/* ─► Pull Request ─► main ─► CI (build·test·image push)
+                                                    │
+                                          Container Registry
+                                                    │
+                                     GitOps (image tag = commit SHA)
+                                                    │
+                                        ArgoCD  (tracks main only)
+                                                    │
+                                          Kubernetes Cluster
+                          Frontend · Backend · PostgreSQL · Redis · Plugins
+```
+
+| Environment | Tooling | Purpose |
+| --- | --- | --- |
+| **Local development** | Docker Compose | Fast backend/frontend inner loop |
+| **Testbed / Production** | Kubernetes + ArgoCD (Kustomize) | Integration, deployment, plugin/collector tests, production-like |
+| **Air-gapped** | Kubernetes + internal registry + ArgoCD | Offline datacenter deployment |
+
+### Repository structure
+
+```
+backend/                 FastAPI backend (:8000, /api/health)
+frontend/                React SPA served by nginx (:80, calls /api)
+plugins/example-plugin/  Reference plugin (independent container, :8080)
+redfish-proxy/           Local-dev TLS shim for a mock Redfish endpoint
+deploy/
+  kubernetes/base/       Kustomize base (all core manifests)
+  kubernetes/overlays/   Per-environment overlays (testbed …)
+  kubernetes/optional/   Opt-in extras (redfish-proxy)
+  argocd/                ArgoCD Application (tracks main)
+docker/nginx/            Reverse-proxy config for the LOCAL compose stack
+scripts/offline/         Build/export images for air-gapped transfer
+.github/workflows/ci.yml CI: PR build/test; main image push + GitOps bump
+docs/                    kubernetes-deployment.md · plugin-development.md · RELEASE_NOTES.md
+```
+
+### Local development (Docker Compose)
 
 ```bash
-# Internet-connected machine: build once, then start
+# Internet-connected machine: build images once, then run the local stack.
 docker compose -f docker-compose.yml -f docker-compose.build.yml build
 docker compose up -d
 ```
+Open **http://\<host-ip\>/**. This is a dev convenience, not the deployment path.
 
-Then open **http://\<host-ip\>/** in a browser (1920×1080 minimum).
+### Kubernetes (testbed) — quick start
+
+```bash
+kubectl create namespace rack-insight
+kubectl apply -n rack-insight -f deploy/kubernetes/base/secrets/secret.example.yaml   # edit first!
+kubectl apply -k deploy/kubernetes/overlays/testbed
+kubectl get pods,svc,ingress -n rack-insight
+```
+
+### ArgoCD (GitOps)
+
+```bash
+# Set repoURL in deploy/argocd/application.yaml, then:
+kubectl apply -n argocd -f deploy/argocd/application.yaml   # ArgoCD tracks main only
+```
+
+Full guide (config reference, immutable image flow, air-gap, troubleshooting):
+**[docs/kubernetes-deployment.md](docs/kubernetes-deployment.md)**.
 
 | Item | Default |
 |---|---|
-| Web UI | `http://<host>/` |
-| API docs (Swagger) | `http://<host>/docs` |
-| Admin account | `admin` / `admin123!` (change via `DEFAULT_ADMIN_*` env) |
+| Web UI | Ingress host (`http://rack-insight.testbed.local/`) |
+| API docs (Swagger) | `<host>/docs` |
+| Admin account | `admin` / `admin123!` (change via `DEFAULT_ADMIN_*`) |
 
-## Architecture
+## Application architecture
 
 ```
 Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack Query)
@@ -258,7 +313,14 @@ complete the entire initial setup from the web UI (no CLI / Swagger needed):
 > older versions before Alembic was introduced) are upgraded in place with
 > data preserved. See "Database migrations" below.
 
-## Offline (Air-gapped) Deployment
+## Offline (Air-gapped) image bundling
+
+> The **official air-gapped runtime is Kubernetes** (internal registry + ArgoCD)
+> — see [docs/kubernetes-deployment.md](docs/kubernetes-deployment.md#air-gapped-deployment).
+> The step below produces the self-contained **images**, which are shared by
+> both paths: for Kubernetes, load them into the internal registry and
+> `kubectl apply -k`; the Docker Compose commands here are the local/dev
+> convenience only.
 
 ### 변경 이유 (Why)
 
@@ -371,20 +433,17 @@ pytest tests/              # test_migrations.py fails if models drift
 metadata and fails the build when a model change ships without a migration;
 it also verifies every migration can downgrade and re-upgrade.
 
-**Running Alembic inside Docker:** use the compose network so the `postgres`
-hostname resolves — a standalone `docker run` has no access to it and fails
-with `Name or service not known`:
+**Running Alembic / inspecting the DB** — from inside the running backend so the
+`postgres` Service hostname resolves:
 
 ```bash
-docker compose exec backend alembic current      # correct
-docker run --rm -it rack-insight-backend:0.1.0 \
-  alembic current                                # wrong: not on the network
-```
+# Kubernetes (official)
+kubectl exec -n rack-insight deploy/backend -- alembic current
+kubectl exec -n rack-insight statefulset/postgres -- psql -U rackinsight -c '\d clusters'
+kubectl logs -n rack-insight deploy/backend --tail 50
 
-To inspect the schema state or logs when the backend restarts on boot:
-
-```bash
-docker logs rack-insight-backend-1 --tail 50
+# Local Docker Compose (dev)
+docker compose exec backend alembic current
 docker compose exec postgres psql -U rackinsight -c '\d clusters'
 ```
 

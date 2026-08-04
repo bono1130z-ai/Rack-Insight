@@ -173,13 +173,38 @@ plugin by editing `deploy/plugins.json` (mounted into the backend as
 ]
 ```
 
-## 11. Kubernetes deployment
+## 11. Kubernetes deployment (the official path)
 
-See `deploy/kubernetes/example-plugin.yaml` (Deployment + Service + ConfigMap).
-The Core reaches the plugin at the **Service DNS** name
-`http://example-plugin:8080` — identical to compose, so nothing in the Core
+The reference plugin ships as `deploy/kubernetes/base/plugins/example-plugin.yaml`
+(Deployment + Service); registration is via the shared plugins ConfigMap
+`deploy/kubernetes/base/config/plugins-configmap.yaml` (mounted into the backend
+as `PLUGINS_CONFIG_FILE`). The Core reaches the plugin at its **Service DNS**
+name `http://<plugin>:8080` — identical to compose — so nothing in the Core
 changes between environments. Scale replicas freely; the Service load-balances.
-Register plugins via a ConfigMap mounted as `PLUGINS_CONFIG_FILE`.
+
+For your own plugin, add a Deployment + Service (copy the example) into the
+Kustomize base (or its own manifest) and add an entry to the plugins ConfigMap.
+
+### Plugin lifecycle (end to end)
+
+```
+1. Copy plugins/example-plugin as a template
+2. Write your plugin code (implement the contract §3–4)
+3. docker build your image
+4. Local test (uvicorn / docker; curl /plugin/manifest, /healthz)
+5. Add k8s Deployment+Service manifest + a plugins-ConfigMap entry
+6. git push to a feature/* branch
+7. Open a Pull Request  → CI builds & tests (no deploy)
+8. Merge to main        → CI builds & pushes your image (commit-SHA tag)
+9. CI updates the overlay image tags (GitOps commit on main)
+10. ArgoCD (tracks main) detects the change
+11. ArgoCD syncs the cluster
+12. Your plugin is deployed; the Core registers and health-checks it
+```
+
+Every plugin container must provide, per the contract: **Health** (`/healthz`,
+`/readyz`), an **API**, a **Manifest** (`/plugin/manifest`), and a **Version**
+(distinct from `apiVersion`). See §4–6.
 
 ## 12. Registering a plugin
 
