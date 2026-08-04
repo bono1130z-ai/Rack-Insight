@@ -1,5 +1,88 @@
 # Release Notes
 
+## 1.4.0 (2026-07-10) — Plugin Architecture Foundation
+
+Establishes the official **Plugin Extension Point**: a new team member can build
+a feature as an independent backend container and register it with Rack Insight
+**without modifying Core**. This is a *foundation* — Registry + Contract + Health
++ Proxy + Example Plugin + Frontend discovery — not an MSA rewrite. All existing
+features stay in Core and are unchanged. One additive migration (0012). Designed
+for **air-gapped** operation (no external internet/SaaS/service-discovery
+dependency).
+
+### Architecture
+
+```
+Rack Insight Core (Auth/RBAC, Inventory, Operations, Alert, Audit,
+                   Plugin Registry, Plugin Proxy)
+        │
+   Plugin Contract   (GET /plugin/manifest, /healthz, /readyz)
+        │
+  Example Plugin • Plugin B • Plugin C   (independent containers)
+```
+
+### Backend
+- **Contract** — a plugin serves `GET /plugin/manifest` (name, displayName,
+  version, apiVersion, health/ready endpoints). Parsed camelCase or snake_case;
+  unknown fields ignored (forward compatible).
+- **Registry** — new `plugins` table (migration 0012). Configuration
+  (endpoint/enabled) is kept distinct from observed runtime state
+  (status/last_health_check/last_success/last_failure/failure_reason).
+- **Registration** — config-based and air-gap friendly: `PLUGINS_CONFIG` (inline
+  JSON) or `PLUGINS_CONFIG_FILE` (a JSON file / Kubernetes ConfigMap), seeded
+  idempotently on every startup. Plugins can also be registered via the API/UI.
+- **Health** — a dedicated background monitor probes each plugin on a short
+  interval and on demand. `HEALTHY / UNHEALTHY / UNKNOWN / DISABLED`. Every call
+  is timeout-bounded and failure-isolated: **a plugin that is down, slow, or
+  returns a malformed manifest never affects Core.**
+- **Proxy foundation** — `GET|POST /api/plugins/{name}/proxy/{path}`. The Core
+  authenticates the user, checks `plugin.proxy`, then forwards. Unknown plugin →
+  404; disabled/unreachable → 503 (never a Core 500 or a hang). The Core does
+  not forward its JWT to plugins.
+- **API** — `GET/POST/PATCH/DELETE /api/plugins`, `GET /api/plugins/{id}`,
+  `POST /api/plugins/{id}/health-check`.
+- **Security** — new core permissions `plugin.view`, `plugin.manage`,
+  `plugin.proxy` seeded into the system roles. Plugin-specific permissions use
+  the reserved `plugin.<name>.<action>` namespace. Plugin lifecycle and health
+  transitions are written to the audit log.
+
+### Example Plugin
+- `plugins/example-plugin/` — a real standalone FastAPI container implementing
+  the contract (`/plugin/manifest`, `/healthz`, `/readyz`, `/api/status`,
+  `/api/echo`) with its own Dockerfile, requirements and README. Shares no code
+  with Core.
+
+### Deployment (air-gapped)
+- `example-plugin` added to `docker-compose.yml` (image-based) and
+  `docker-compose.build.yml`. Core reaches it at the service DNS
+  `http://example-plugin:8080` (identical in compose and Kubernetes) — never
+  localhost. The Core does **not** `depends_on` any plugin.
+- `deploy/plugins.json` — a ConfigMap-style registration file mounted into the
+  backend (`PLUGINS_CONFIG_FILE=/config/plugins.json`).
+- `deploy/kubernetes/example-plugin.yaml` — Deployment + Service + ConfigMap.
+- `scripts/offline/build_and_export.sh` builds and bundles plugin images.
+
+### Frontend
+- **Administration → Plugins** — table (Name, Display Name, Version, API
+  Version, Status, Endpoint, Last Health Check, Enabled), a detail dialog (with
+  last success/failure and failure reason), Register, Enable/Disable, and
+  Health-Check actions. Permission-gated (`plugin.view` to see,
+  `plugin.manage` to change). The 1.2.2 navigation (Dashboard / Inventory /
+  Operations / Administration / Access Management) is preserved; Plugins is
+  added under Administration.
+
+### Explicitly out of scope (future releases)
+- Dynamic UI (Module Federation, runtime JS bundles, iframe plugin UI, arbitrary
+  component injection). This patch delivers frontend **discovery** only.
+- Plugin events flowing into the Alert Engine — documented extension point; the
+  event model already tolerates `plugin.*` event types (AlertPolicy maps unknown
+  types to the `Other` category), so it can be added without a contract change.
+
+### Migration notes (1.3.x → 1.4.0)
+- `docker compose up -d` applies migration 0012 automatically. No data backfill.
+- No existing table, API, permission, or navigation item changed. Existing
+  1.2.2/1.3.x functionality is unaffected.
+
 ## 1.3.1 (2026-07-10) — Alert Engine responsibility split
 
 A maintainability patch on the 1.3.0 Alert Engine. The architecture is

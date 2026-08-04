@@ -50,10 +50,44 @@ def record_audit(
     old_value: dict[str, Any] | None = None,
     new_value: dict[str, Any] | None = None,
 ) -> None:
+    _add_audit(
+        db, actor.id, actor.username, action, entity_type, entity_name,
+        entity_id, old_value, new_value,
+    )
+
+
+def record_system_audit(
+    db: AsyncSession,
+    action: str,
+    entity_type: str,
+    entity_name: str | None,
+    entity_id: Any = None,
+    old_value: dict[str, Any] | None = None,
+    new_value: dict[str, Any] | None = None,
+) -> None:
+    """Audit entry for a system-driven change (no user actor), e.g. a plugin
+    health transition detected by the background monitor."""
+    _add_audit(
+        db, None, "system", action, entity_type, entity_name,
+        entity_id, old_value, new_value,
+    )
+
+
+def _add_audit(
+    db: AsyncSession,
+    user_id: Any,
+    username: str,
+    action: str,
+    entity_type: str,
+    entity_name: str | None,
+    entity_id: Any,
+    old_value: dict[str, Any] | None,
+    new_value: dict[str, Any] | None,
+) -> None:
     db.add(
         AuditLog(
-            user_id=actor.id,
-            username=actor.username,
+            user_id=user_id,
+            username=username,
             action=action,
             entity_type=entity_type,
             entity_id=entity_id,

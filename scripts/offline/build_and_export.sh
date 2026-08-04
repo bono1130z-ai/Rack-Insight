@@ -12,12 +12,16 @@
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-IMAGE_TAG="${1:-${IMAGE_TAG:-1.3.1}}"
+IMAGE_TAG="${1:-${IMAGE_TAG:-1.4.0}}"
 IMAGE_PREFIX="${IMAGE_PREFIX:-rack-insight}"
 DIST_DIR="${REPO_ROOT}/dist"
 
 BACKEND_IMAGE="${IMAGE_PREFIX}-backend:${IMAGE_TAG}"
 FRONTEND_IMAGE="${IMAGE_PREFIX}-frontend:${IMAGE_TAG}"
+# Bundled plugin images (add new plugins here to ship them in the air-gap bundle).
+PLUGIN_IMAGES=(
+  "${IMAGE_PREFIX}-plugin-example:${IMAGE_TAG}"
+)
 INFRA_IMAGES=(
   "postgres:17-alpine"
   "redis:7-alpine"
@@ -30,6 +34,9 @@ echo "==> Building application images (tag: ${IMAGE_TAG})"
 docker build -t "${BACKEND_IMAGE}" "${REPO_ROOT}/backend"
 docker build -t "${FRONTEND_IMAGE}" "${REPO_ROOT}/frontend"
 
+echo "==> Building plugin images"
+docker build -t "${IMAGE_PREFIX}-plugin-example:${IMAGE_TAG}" "${REPO_ROOT}/plugins/example-plugin"
+
 echo "==> Pulling infrastructure images"
 for image in "${INFRA_IMAGES[@]}"; do
   docker pull "${image}"
@@ -37,7 +44,7 @@ done
 
 IMAGES_ARCHIVE="${DIST_DIR}/rack-insight-images-${IMAGE_TAG}.tar.gz"
 echo "==> Exporting images to ${IMAGES_ARCHIVE}"
-docker save "${BACKEND_IMAGE}" "${FRONTEND_IMAGE}" "${INFRA_IMAGES[@]}" \
+docker save "${BACKEND_IMAGE}" "${FRONTEND_IMAGE}" "${PLUGIN_IMAGES[@]}" "${INFRA_IMAGES[@]}" \
   | gzip > "${IMAGES_ARCHIVE}"
 
 DEPLOY_ARCHIVE="${DIST_DIR}/rack-insight-deploy-${IMAGE_TAG}.tar.gz"
@@ -45,6 +52,8 @@ echo "==> Packaging deploy bundle to ${DEPLOY_ARCHIVE}"
 tar -czf "${DEPLOY_ARCHIVE}" -C "${REPO_ROOT}" \
   docker-compose.yml \
   docker/nginx/default.conf \
+  deploy/plugins.json \
+  deploy/kubernetes/example-plugin.yaml \
   backend/.env.example \
   scripts/offline/load_images.sh \
   README.md

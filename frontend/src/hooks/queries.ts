@@ -120,6 +120,14 @@ export function useUserGroups() {
   return useQuery({ queryKey: ["user-groups"], queryFn: api.userGroups });
 }
 
+export function usePlugins() {
+  return useQuery({
+    queryKey: ["plugins"],
+    queryFn: api.plugins,
+    refetchInterval: 30_000,
+  });
+}
+
 export function useCredentials() {
   return useQuery({ queryKey: ["credentials"], queryFn: api.credentials });
 }

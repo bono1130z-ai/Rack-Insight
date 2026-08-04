@@ -8,6 +8,7 @@ import type {
   DashboardHealth,
   DeviceHealth,
   HistoryPage,
+  Plugin,
   BulkDeviceResult,
   CleanupResult,
   ClusterSummary,
@@ -208,6 +209,17 @@ export const api = {
 
   dashboardAlerts: () => request<DashboardAlerts>("/dashboard/alerts"),
   dashboardHealth: () => request<DashboardHealth>("/dashboard/health"),
+
+  // --- Plugins (Plugin Architecture Foundation) ---
+  plugins: () => request<Plugin[]>("/plugins"),
+  plugin: (id: string) => request<Plugin>(`/plugins/${id}`),
+  createPlugin: (payload: Record<string, unknown>) =>
+    request<Plugin>("/plugins", { method: "POST", body: JSON.stringify(payload) }),
+  updatePlugin: (id: string, payload: Record<string, unknown>) =>
+    request<Plugin>(`/plugins/${id}`, { method: "PATCH", body: JSON.stringify(payload) }),
+  deletePlugin: (id: string) => request<void>(`/plugins/${id}`, { method: "DELETE" }),
+  pluginHealthCheck: (id: string) =>
+    request<Plugin>(`/plugins/${id}/health-check`, { method: "POST" }),
 
   alertSettings: () => request<AlertSettings>("/lifecycle/alert-settings"),
   updateAlertSettings: (payload: AlertSettings) =>

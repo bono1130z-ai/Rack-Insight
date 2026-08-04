@@ -1,0 +1,87 @@
+# Rack Insight — Example Plugin (Kubernetes)
+#
+# An independent Deployment + Service. The Core reaches the plugin via the
+# Kubernetes Service DNS name `http://example-plugin:8080` — the same URL used
+# in docker-compose — so nothing in the Core changes between environments.
+#
+# Register the plugin with the Core by adding it to the Core's PLUGINS_CONFIG
+# (or a ConfigMap mounted as PLUGINS_CONFIG_FILE); see the ConfigMap below.
+#
+# Air-gapped: image is pulled from the internal registry only (imagePullPolicy
+# IfNotPresent), no external dependency at runtime.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: example-plugin
+  labels:
+    app.kubernetes.io/name: example-plugin
+    app.kubernetes.io/part-of: rack-insight
+spec:
+  replicas: 1  # scale freely; the Service load-balances across replicas
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: example-plugin
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: example-plugin
+    spec:
+      containers:
+        - name: example-plugin
+          image: rack-insight-plugin-example:1.4.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 128Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: example-plugin
+  labels:
+    app.kubernetes.io/name: example-plugin
+    app.kubernetes.io/part-of: rack-insight
+spec:
+  selector:
+    app.kubernetes.io/name: example-plugin
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+# Mount this ConfigMap into the Core backend as a file and point
+# PLUGINS_CONFIG_FILE at it (e.g. /config/plugins.json). Adding a plugin is a
+# ConfigMap edit — no Core image change.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: rack-insight-plugins
+  labels:
+    app.kubernetes.io/part-of: rack-insight
+data:
+  plugins.json: |
+    [
+      {
+        "name": "example-plugin",
+        "endpoint": "http://example-plugin:8080",
+        "enabled": true,
+        "display_name": "Example Plugin"
+      }
+    ]

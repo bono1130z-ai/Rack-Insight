@@ -85,6 +85,12 @@ PERMISSIONS: tuple[PermissionDef, ...] = (
     PermissionDef("binding.create", "Create Role Binding", "Access Management", "Bind roles to groups"),
     PermissionDef("binding.delete", "Delete Role Binding", "Access Management", "Remove role bindings"),
     PermissionDef("permission.view", "View Permissions", "Access Management", "View the permission catalog"),
+    # Plugins (Plugin Architecture Foundation). Plugins may add their own
+    # namespaced permissions (plugin.<name>.<action>) via their manifest in a
+    # future release; these are the Core-level plugin permissions.
+    PermissionDef("plugin.view", "View Plugins", "Plugins", "View the plugin registry and status"),
+    PermissionDef("plugin.manage", "Manage Plugins", "Plugins", "Register, enable/disable and remove plugins"),
+    PermissionDef("plugin.proxy", "Use Plugin APIs", "Plugins", "Call plugin APIs through the Core proxy"),
 )
 
 ALL_PERMISSION_CODES: tuple[str, ...] = tuple(p.code for p in PERMISSIONS)
@@ -97,11 +103,12 @@ _VIEW_ONLY = (
     "dashboard.view", "inventory.view", "cluster.view", "rack.view",
     "template.view", "device.view", "credential.view", "collector.view",
     "discovery.view", "lifecycle.view", "audit.view",
-    "alert.view", "history.view",
+    "alert.view", "history.view", "plugin.view",
 )
 
 _OPERATOR = _VIEW_ONLY + (
     "alert.resolve",
+    "plugin.proxy",
     "cluster.create", "cluster.update", "cluster.delete",
     "rack.create", "rack.update", "rack.delete", "rack.layout.edit",
     "template.create", "template.update", "template.delete",
@@ -154,4 +161,5 @@ MENU_PERMISSIONS: tuple[dict[str, str], ...] = (
     {"key": "roles", "permission": "role.view"},
     {"key": "role-bindings", "permission": "binding.view"},
     {"key": "permissions", "permission": "permission.view"},
+    {"key": "plugins", "permission": "plugin.view"},
 )

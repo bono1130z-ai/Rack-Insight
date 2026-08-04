@@ -3,6 +3,56 @@
 All notable changes to Rack Insight. See `docs/RELEASE_NOTES.md` for the full
 notes of each release.
 
+## [1.4.0] - 2026-07-10 — Plugin Architecture Foundation
+
+Foundation for extending Rack Insight with independent plugin backends without
+modifying Core. Additive migration 0012; fully backward compatible. No MSA
+rewrite — existing Cluster/Rack/Device/Discovery/Collector/Lifecycle/Alert/
+Audit/Access-Management features are unchanged and stay in Core.
+
+### Added
+- **Plugin Contract** (`schemas/plugin.py`): `GET /plugin/manifest`
+  (name/displayName/version/apiVersion/health/ready), camelCase-or-snake_case,
+  forward-compatible.
+- **Plugin Registry** (`services/plugin_registry.py`, `models/plugin.py`,
+  migration 0012 `plugins` table): configuration (endpoint/enabled) kept
+  separate from runtime state (status / last_health_check / last_success /
+  last_failure / reason).
+- **Config-based registration** (`PLUGINS_CONFIG` inline JSON or
+  `PLUGINS_CONFIG_FILE` / ConfigMap), seeded idempotently at startup. Air-gap
+  friendly; no external service discovery.
+- **Health monitor** (`scheduler/plugin_monitor.py`): dedicated, isolated
+  background probe. Statuses HEALTHY / UNHEALTHY / UNKNOWN / DISABLED. A dead,
+  slow, or malformed plugin never affects Core (bounded timeouts, per-plugin
+  isolation).
+- **REST proxy foundation**: `GET|POST /api/plugins/{name}/proxy/{path}` — Core
+  authenticates + checks `plugin.proxy`, then forwards; unknown → 404, disabled/
+  unreachable → 503 (never Core 500). Core JWT is not forwarded to plugins.
+- **Registry API**: `GET/POST/PATCH/DELETE /api/plugins`, `GET /api/plugins/{id}`,
+  `POST /api/plugins/{id}/health-check`.
+- **RBAC**: `plugin.view` / `plugin.manage` / `plugin.proxy` seeded into system
+  roles (Viewer: view; Operator: view+proxy; Administrator: all). Namespace
+  `plugin.<name>.<action>` reserved for plugin-declared permissions.
+- **Audit**: plugin register/enable/disable/remove and health transitions are
+  audited (system-actor helper for monitor-driven changes).
+- **Example Plugin** (`plugins/example-plugin/`): standalone FastAPI container
+  (`/plugin/manifest`, `/healthz`, `/readyz`, `/api/status`, `/api/echo`) with
+  Dockerfile, requirements, README.
+- **Deployment**: `example-plugin` in docker-compose (image + build override),
+  `deploy/plugins.json` ConfigMap-style file mounted into the backend,
+  `deploy/kubernetes/example-plugin.yaml` (Deployment + Service + ConfigMap),
+  offline export bundles plugin images.
+- **Frontend**: Administration → **Plugins** page (table with name/version/api
+  version/status/endpoint/last-check/enabled, detail dialog, register,
+  enable/disable, health-check), permission-gated; header/sidebar unchanged.
+- **Docs**: `docs/plugin-development.md` (full plugin developer guide).
+
+### Notes
+- Dynamic UI injection (Module Federation, runtime bundles, iframes) is out of
+  scope, reserved for a future release. Plugin events → Alert Engine is a
+  documented future extension point (the event model already tolerates unknown
+  `plugin.*` event types via `AlertPolicy`'s `Other` fallback).
+
 ## [1.3.1] - 2026-07-10 — Alert Engine responsibility split
 
 Maintainability patch. Same architecture and behaviour as 1.3.0; the Alert

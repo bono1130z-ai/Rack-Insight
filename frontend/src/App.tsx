@@ -10,6 +10,7 @@ import { DeviceManagementPage } from "@/pages/admin/DeviceManagementPage";
 import { DeviceTemplatesPage } from "@/pages/admin/DeviceTemplatesPage";
 import { DiscoveryPage } from "@/pages/admin/DiscoveryPage";
 import { LifecyclePage } from "@/pages/admin/LifecyclePage";
+import { PluginsPage } from "@/pages/admin/PluginsPage";
 import { RackEditorPage } from "@/pages/admin/RackEditorPage";
 import { RackManagementPage } from "@/pages/admin/RackManagementPage";
 import { RoleDetailsPage } from "@/pages/admin/RoleDetailsPage";
@@ -104,6 +105,14 @@ export default function App() {
               element={
                 <RequirePermission permission="credential.view">
                   <CredentialManagementPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/admin/plugins"
+              element={
+                <RequirePermission permission="plugin.view">
+                  <PluginsPage />
                 </RequirePermission>
               }
             />

@@ -11,6 +11,7 @@ import {
   KeyRound,
   LayoutDashboard,
   LogOut,
+  Puzzle,
   Radar,
   Recycle,
   ScrollText,
@@ -88,6 +89,7 @@ const SECTIONS: MenuSection[] = [
     Icon: Settings,
     items: [
       { to: "/admin/credentials", label: "Credentials", Icon: KeyRound, permission: "credential.view" },
+      { to: "/admin/plugins", label: "Plugins", Icon: Puzzle, permission: "plugin.view" },
     ],
   },
   {

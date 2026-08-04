@@ -19,6 +19,7 @@ from api.routes import lifecycle as lifecycle_routes
 from api.routes import device_templates as device_template_routes
 from api.routes import devices as device_routes
 from api.routes import export as export_routes
+from api.routes import plugins as plugin_routes
 from api.routes import racks as rack_routes
 from api.routes import users as user_routes
 from auth.security import hash_password
@@ -28,7 +29,9 @@ from database import async_session_factory, engine
 from database.migrations import run_migrations
 from models import User, UserRole
 from scheduler.background import start_scheduler, stop_scheduler
+from scheduler.plugin_monitor import start_plugin_monitor, stop_plugin_monitor
 from services.lifecycle_service import ensure_default_policies
+from services.plugin_registry import seed_plugins_from_config
 from services.rbac_service import ensure_rbac_seed
 from utils.logging import configure_logging, get_logger
 
@@ -67,9 +70,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await _bootstrap_admin()
     async with async_session_factory() as db:
         await ensure_default_policies(db)
+        # Register config-declared plugins (idempotent; failure-isolated).
+        await seed_plugins_from_config(db)
     start_scheduler()
+    start_plugin_monitor()
     logger.info("%s v%s started", settings.app_name, settings.app_version)
     yield
+    stop_plugin_monitor()
     stop_scheduler()
     await close_redis()
     await engine.dispose()
@@ -105,6 +112,7 @@ app.include_router(audit_routes.router, prefix=settings.api_prefix)
 app.include_router(discovery_routes.router, prefix=settings.api_prefix)
 app.include_router(lifecycle_routes.router, prefix=settings.api_prefix)
 app.include_router(alert_routes.router, prefix=settings.api_prefix)
+app.include_router(plugin_routes.router, prefix=settings.api_prefix)
 
 
 @app.get("/api/health", tags=["system"])

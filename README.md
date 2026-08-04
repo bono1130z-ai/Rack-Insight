@@ -67,6 +67,30 @@ Browser ── React + TypeScript (Vite, TailwindCSS, shadcn-style UI, TanStack 
   Viewer** roles plus custom roles; the sidebar and every action are
   permission-driven. The legacy `ADMIN` role remains a break-glass superuser.
 
+### What's new in 1.4.0 — Plugin Architecture Foundation
+
+Rack Insight now has an official **Plugin Extension Point**: build a feature as
+an independent backend container and register it with the Core **without
+modifying Core code**.
+
+- **Plugin Contract** — a plugin serves `GET /plugin/manifest`, `/healthz`,
+  `/readyz` and its own API. See `docs/plugin-development.md`.
+- **Plugin Registry + health** — config-based registration (`PLUGINS_CONFIG` /
+  `PLUGINS_CONFIG_FILE` / ConfigMap), a background health monitor
+  (HEALTHY / UNHEALTHY / UNKNOWN / DISABLED), and full failure isolation — a
+  plugin being down never affects Core.
+- **REST proxy** — `GET|POST /api/plugins/{name}/proxy/{path}`: the Core
+  authenticates and authorizes (`plugin.proxy`), then forwards. The browser
+  never calls plugins directly.
+- **Example Plugin** — `plugins/example-plugin/`, a real standalone container,
+  wired into docker-compose and Kubernetes (`deploy/kubernetes/`).
+- **Administration → Plugins** — register, view status/detail, enable/disable,
+  and health-check plugins from the UI.
+- Additive migration (0012); air-gap friendly; fully backward compatible.
+  Dynamic plugin UI is intentionally deferred to a future release.
+
+See `docs/plugin-development.md`, `CHANGELOG.md` and `docs/RELEASE_NOTES.md`.
+
 ### What's new in 1.2.1 — Access Management (RBAC)
 
 - **Role-Based Access Control** replaces the standalone User Management page.

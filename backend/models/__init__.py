@@ -19,6 +19,7 @@ from models.inventory import (
     SwitchInventory,
 )
 from models.operations import Alert, AlertSettings, DeviceHistory, Event
+from models.plugin import Plugin
 from models.rack import Rack, RackUnit
 from models.rbac import (
     Permission,
@@ -72,4 +73,5 @@ __all__ = [
     "Alert",
     "DeviceHistory",
     "AlertSettings",
+    "Plugin",
 ]
