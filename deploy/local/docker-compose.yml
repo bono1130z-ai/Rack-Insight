@@ -1,14 +1,15 @@
-# Rack Insight — LOCAL DEVELOPMENT compose file.
+# Rack Insight — LOCAL DEVELOPMENT ONLY.
 #
-# This is the fast local inner-loop for backend/frontend development. It is NOT
-# the official deployment mechanism: the testbed and production run on
-# Kubernetes + ArgoCD (see deploy/kubernetes/ and docs/kubernetes-deployment.md).
+# Fast local inner-loop for backend/frontend work. This is NOT the deployment
+# mechanism — the testbed/production run on Kubernetes + ArgoCD
+# (see ../kubernetes/ and ../../docs/deployment.md).
 #
-# It references pre-built images only (no build:), so `docker compose up -d`
-# works with zero internet access once images have been loaded via `docker load`
-# (see README "Offline images"). To build images on an internet-connected
-# machine, use the override:
-#   docker compose -f docker-compose.yml -f docker-compose.build.yml build
+# Run from this directory (deploy/local):
+#   docker compose up -d                                          # run (pre-built images)
+#   docker compose -f docker-compose.yml -f docker-compose.build.yml build   # build images
+#
+# Images are pre-built (no build:), so `up` works offline once images are loaded
+# via `docker load` (see ../offline/).
 services:
   postgres:
     image: postgres:17-alpine
@@ -61,7 +62,7 @@ services:
       # (or overriding PLUGINS_CONFIG) is all it takes to register a plugin.
       PLUGINS_CONFIG_FILE: ${PLUGINS_CONFIG_FILE:-/config/plugins.json}
     volumes:
-      - ./deploy/plugins.json:/config/plugins.json:ro
+      - ./plugins.json:/config/plugins.json:ro
     # NB: the backend intentionally does NOT depend on any plugin — the Core
     # starts and stays healthy whether or not a plugin is up (failure isolation).
     depends_on:
@@ -99,7 +100,7 @@ services:
     ports:
       - "${HTTP_PORT:-80}:80"
     volumes:
-      - ./docker/nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       backend:
         condition: service_healthy

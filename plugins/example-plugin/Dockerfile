@@ -1,4 +1,4 @@
-# Built on an internet-connected machine only (see scripts/offline/).
+# Built on an internet-connected machine only (see deploy/offline/).
 # The resulting image is self-contained and runs with no internet access,
 # exactly like the Core backend image.
 FROM python:3.13-slim

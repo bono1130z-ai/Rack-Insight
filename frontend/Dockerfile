@@ -1,4 +1,4 @@
-# Built on an internet-connected machine only (see scripts/offline/).
+# Built on an internet-connected machine only (see deploy/offline/).
 # Stage 1 runs `npm ci` against the committed lockfile; the final image is
 # just nginx + static files, so the container never runs npm at runtime and
 # works without any internet access.

@@ -2,7 +2,7 @@
 # Load the Rack Insight image archive on an AIR-GAPPED host.
 #
 # Usage:
-#   ./scripts/offline/load_images.sh rack-insight-images-<tag>.tar.gz
+#   ./deploy/offline/load_images.sh rack-insight-images-<tag>.tar.gz
 set -euo pipefail
 
 ARCHIVE="${1:?Usage: $0 <rack-insight-images-*.tar.gz>}"
@@ -21,5 +21,7 @@ docker image ls --format '{{.Repository}}:{{.Tag}}' \
   | grep -E '^(rack-insight-|postgres:17-alpine|redis:7-alpine|nginx:1.27-alpine)' || true
 
 echo
-echo "Start the stack with:"
-echo "  docker compose up -d"
+echo "Next:"
+echo "  Kubernetes (official): push images to the internal registry, then"
+echo "                         kubectl apply -k deploy/kubernetes/overlays/testbed"
+echo "  Local Compose (dev):   cd deploy/local && docker compose up -d"

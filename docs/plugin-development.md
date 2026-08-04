@@ -164,7 +164,7 @@ Add your plugin as a service and register it with the Core via config.
 ```
 
 The Core does **not** `depends_on` any plugin (failure isolation). Register the
-plugin by editing `deploy/plugins.json` (mounted into the backend as
+plugin by editing `deploy/local/plugins.json` (mounted into the backend as
 `PLUGINS_CONFIG_FILE=/config/plugins.json`):
 
 ```json
@@ -263,14 +263,14 @@ Log to stdout (12-factor); the container runtime collects it. Never log secrets.
   must run with **no** runtime internet access (pin dependencies, no runtime
   downloads).
 - Ship the image inside the Rack Insight offline bundle
-  (`scripts/offline/build_and_export.sh` builds and exports plugin images too).
+  (`deploy/offline/build_and_export.sh` builds and exports plugin images too).
 - Registration uses local configuration only — no external service discovery.
 
 ```
 RackInsight Bundle
 ├── Core / Frontend images
 ├── Plugin images
-├── deploy/plugins.json, deploy/kubernetes/*
+├── deploy/local/plugins.json, deploy/kubernetes/*
 ├── docker-compose.yml
 └── load/install scripts
 ```

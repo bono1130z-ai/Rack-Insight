@@ -3,11 +3,29 @@
 All notable changes to Rack Insight. See `docs/RELEASE_NOTES.md` for the full
 notes of each release.
 
-## [Unreleased] — Kubernetes / ArgoCD deployment architecture
+## [Unreleased] — Kubernetes / ArgoCD deployment architecture + repo cleanup
 
-Deployment-architecture migration only — **no application code, API, DB schema,
-RBAC, alert, collector, inventory, or plugin-contract changes.** The app version
-is deliberately not bumped.
+Deployment-architecture migration and repository reorganization only — **no
+application code, API, DB schema, RBAC, alert, collector, inventory, or
+plugin-contract changes.** The app version is deliberately not bumped.
+
+### Repository reorganized (app / deploy / docs)
+
+- **All deployment concerns consolidated under `deploy/`**: `local/` (Docker
+  Compose, moved from the repo root + `docker/`), `kubernetes/`, `argocd/`,
+  `offline/` (moved from `scripts/offline/`). The root is now just
+  `backend/ frontend/ plugins/ deploy/ docs/ + README + CHANGELOG`.
+- **Removed the orphan `redfish-proxy/`** (a TLS shim to a mock Redfish server
+  that does not exist here — not wired to anything) and its opt-in k8s template.
+- **README slimmed** to a concise overview + quickstart + docs index; the
+  per-release "What's new" wall was removed (history lives in `CHANGELOG.md` /
+  `docs/RELEASE_NOTES.md`).
+- **Docs split** by intent: `docs/development.md` (run/dev/migrations),
+  `docs/deployment.md` (k8s/ArgoCD, renamed from kubernetes-deployment.md),
+  `docs/architecture.md` (design/features), `docs/plugin-development.md`;
+  `deploy/README.md` indexes the deployment folder.
+- Compose/offline relative paths and Dockerfile comments updated for the new
+  locations; container images and manifests are unchanged.
 
 ### Added
 - **Kustomize manifests** (`deploy/kubernetes/base` + `overlays/testbed`):

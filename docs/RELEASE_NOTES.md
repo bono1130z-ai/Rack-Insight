@@ -25,7 +25,7 @@ bumped and all existing functionality is preserved.
   `/readyz`, `pg_isready`, `redis-cli ping`). Service-to-service traffic uses
   Kubernetes Service DNS; because those names match the app's existing env
   defaults (`postgres`, `redis`), **no application code changed**.
-- New guide `docs/kubernetes-deployment.md` (config reference, immutable image
+- New guide `docs/deployment.md` (config reference, immutable image
   flow, air-gap, troubleshooting); README rewritten around the new model; the
   plugin guide gained the end-to-end GitOps plugin lifecycle.
 
@@ -98,10 +98,10 @@ Rack Insight Core (Auth/RBAC, Inventory, Operations, Alert, Audit,
   `docker-compose.build.yml`. Core reaches it at the service DNS
   `http://example-plugin:8080` (identical in compose and Kubernetes) — never
   localhost. The Core does **not** `depends_on` any plugin.
-- `deploy/plugins.json` — a ConfigMap-style registration file mounted into the
+- `deploy/local/plugins.json` — a ConfigMap-style registration file mounted into the
   backend (`PLUGINS_CONFIG_FILE=/config/plugins.json`).
 - `deploy/kubernetes/example-plugin.yaml` — Deployment + Service + ConfigMap.
-- `scripts/offline/build_and_export.sh` builds and bundles plugin images.
+- `deploy/offline/build_and_export.sh` builds and bundles plugin images.
 
 ### Frontend
 - **Administration → Plugins** — table (Name, Display Name, Version, API

@@ -35,6 +35,7 @@ no benefit at this size.
 
 ```
 deploy/
+├── local/                        # Docker Compose (local development only)
 ├── kubernetes/
 │   ├── base/                     # environment-agnostic manifests
 │   │   ├── namespace.yaml
@@ -47,12 +48,11 @@ deploy/
 │   │   ├── plugins/example-plugin.yaml
 │   │   ├── ingress.yaml
 │   │   └── kustomization.yaml
-│   ├── overlays/
-│   │   └── testbed/kustomization.yaml     # ArgoCD points here
-│   └── optional/
-│       └── redfish-proxy.yaml    # opt-in dev TLS shim (not in base)
-└── argocd/
-    └── application.yaml          # ArgoCD Application (tracks main)
+│   └── overlays/
+│       └── testbed/kustomization.yaml     # ArgoCD points here
+├── argocd/
+│   └── application.yaml          # ArgoCD Application (tracks main)
+└── offline/                      # build/export & load images for air-gap
 ```
 
 ## Components, ports & health
@@ -174,19 +174,10 @@ memory), and Redis is an ephemeral cache — neither uses a PVC. Set
 managed/external database, point `DATABASE_URL` at it and remove the postgres
 StatefulSet from the base — nothing else changes.
 
-## Optional: Redfish Proxy
-
-`redfish-proxy/` is a **local-dev** TLS shim (compose targets
-`host.docker.internal:8001` with git-ignored certs — neither valid in-cluster).
-An opt-in cluster template is provided at
-`deploy/kubernetes/optional/redfish-proxy.yaml`; it is **not** part of the base
-build. It needs a TLS Secret and an in-cluster upstream — see the comments in
-that file.
-
 ## Air-gapped deployment
 
 1. On an internet-connected machine, build and export all images (backend,
-   frontend, plugin, infra) with `scripts/offline/build_and_export.sh`.
+   frontend, plugin, infra) with `deploy/offline/build_and_export.sh`.
 2. Carry the archive in; load it into the **internal registry** (`docker load`
    then `docker tag` / `docker push` to `registry.internal:5000`).
 3. Set the overlay images to the internal registry, `kubectl apply -k …` (or let

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
-# Build all Rack Insight images on an INTERNET-CONNECTED machine and export
-# them (plus the infrastructure images) into a single archive that can be
-# carried into an air-gapped network and loaded with `docker load`.
+# Build all Rack Insight images on an INTERNET-CONNECTED machine and export them
+# (plus the infrastructure images) into archives that can be carried into an
+# air-gapped network. The same images run under Kubernetes (load them into the
+# internal registry) and under local Docker Compose.
 #
 # Usage:
-#   ./scripts/offline/build_and_export.sh [IMAGE_TAG]
+#   ./deploy/offline/build_and_export.sh [IMAGE_TAG]
 #
-# Output:
-#   dist/rack-insight-images-<tag>.tar.gz   (all 5 docker images)
-#   dist/rack-insight-deploy-<tag>.tar.gz   (compose file + nginx config + scripts)
+# Output (in ./dist):
+#   rack-insight-images-<tag>.tar.gz   (all docker images)
+#   rack-insight-deploy-<tag>.tar.gz   (compose + k8s manifests + configs)
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -50,13 +51,11 @@ docker save "${BACKEND_IMAGE}" "${FRONTEND_IMAGE}" "${PLUGIN_IMAGES[@]}" "${INFR
 DEPLOY_ARCHIVE="${DIST_DIR}/rack-insight-deploy-${IMAGE_TAG}.tar.gz"
 echo "==> Packaging deploy bundle to ${DEPLOY_ARCHIVE}"
 tar -czf "${DEPLOY_ARCHIVE}" -C "${REPO_ROOT}" \
-  docker-compose.yml \
-  docker/nginx/default.conf \
-  deploy/plugins.json \
+  deploy/local \
   deploy/kubernetes \
   deploy/argocd \
+  deploy/offline/load_images.sh \
   backend/.env.example \
-  scripts/offline/load_images.sh \
   README.md
 
 echo
@@ -65,5 +64,7 @@ ls -lh "${IMAGES_ARCHIVE}" "${DEPLOY_ARCHIVE}"
 echo
 echo "On the air-gapped host:"
 echo "  tar -xzf rack-insight-deploy-${IMAGE_TAG}.tar.gz"
-echo "  ./scripts/offline/load_images.sh rack-insight-images-${IMAGE_TAG}.tar.gz"
-echo "  IMAGE_TAG=${IMAGE_TAG} docker compose up -d"
+echo "  ./deploy/offline/load_images.sh rack-insight-images-${IMAGE_TAG}.tar.gz"
+echo "  # Kubernetes (official): load images into the internal registry, then"
+echo "  #   kubectl apply -k deploy/kubernetes/overlays/testbed"
+echo "  # Local Compose:  cd deploy/local && IMAGE_TAG=${IMAGE_TAG} docker compose up -d"
