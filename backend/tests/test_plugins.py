@@ -116,10 +116,12 @@ async def test_register_list_get_and_manifest_enrichment(client):
     assert created.status_code == 201, created.text
     body = created.json()
     # Manifest was fetched from the (in-process) plugin and enriched the record.
-    assert body["version"] == "1.0.0"
+    assert body["version"] == example_plugin.PLUGIN_VERSION
     assert body["api_version"] == "v1"
     assert body["display_name"] == "Example Plugin"
     assert body["status"] == "UNKNOWN"
+    # The UI descriptor is parsed from the cached manifest.
+    assert body["ui"] == {"type": "iframe", "path": "/ui/", "title": "Example Plugin"}
 
     listed = (await client.get("/api/plugins")).json()
     assert [p["name"] for p in listed] == ["example-plugin"]
@@ -248,7 +250,7 @@ async def test_proxy_get_and_post(client):
     assert got.json() == {
         "plugin": "example-plugin",
         "status": "running",
-        "version": "1.0.0",
+        "version": example_plugin.PLUGIN_VERSION,
     }
 
     posted = await client.post(
@@ -302,6 +304,154 @@ async def _login(app, username, password) -> AsyncClient:
     ).json()["access_token"]
     c.headers["Authorization"] = f"Bearer {token}"
     return c
+
+
+# --- Plugin Platform: UI session, UI proxy, inventory, jobs -------------------
+async def _register_example(client) -> None:
+    await client.post(
+        "/api/plugins",
+        json={"name": "example-plugin", "endpoint": "http://example-plugin:8080"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_ui_session_mints_scoped_cookie(client):
+    resp = await client.post("/api/plugins/ui-session")
+    assert resp.status_code == 200
+    assert resp.json()["expires_in"] > 0
+    cookie = resp.cookies.get("ri_plugin_ui")
+    assert cookie
+    # Scoped + hardened: Path=/api/plugins, HttpOnly, SameSite=Strict.
+    set_cookie = resp.headers["set-cookie"].lower()
+    assert "path=/api/plugins" in set_cookie
+    assert "httponly" in set_cookie
+    assert "samesite=strict" in set_cookie
+
+
+@pytest.mark.asyncio
+async def test_ui_proxy_serves_frontend_with_frame_csp(client):
+    await _register_example(client)
+    resp = await client.get("/api/plugins/example-plugin/ui/")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "Example Plugin" in resp.text
+    # The Core dictates framing policy for the embedded plugin UI.
+    assert resp.headers["content-security-policy"] == "frame-ancestors 'self'"
+
+
+@pytest.mark.asyncio
+async def test_ui_and_proxy_accept_cookie_without_bearer(client):
+    """An iframe cannot send a Bearer header; the ri_plugin_ui cookie authorizes
+    both the UI proxy and the API proxy on its own."""
+    await _register_example(client)
+    session = await client.post("/api/plugins/ui-session")
+    cookie = session.cookies.get("ri_plugin_ui")
+
+    # A fresh client with NO Authorization header, only the cookie.
+    import main as app_main
+
+    async with AsyncClient(
+        transport=ASGITransport(app=app_main.app),
+        base_url="http://test",
+        cookies={"ri_plugin_ui": cookie},
+    ) as bare:
+        ui = await bare.get("/api/plugins/example-plugin/ui/")
+        assert ui.status_code == 200
+        api_call = await bare.get("/api/plugins/example-plugin/proxy/api/status")
+        assert api_call.status_code == 200
+        # No credentials at all -> 401.
+        async with AsyncClient(
+            transport=ASGITransport(app=app_main.app), base_url="http://test"
+        ) as anon:
+            assert (
+                await anon.get("/api/plugins/example-plugin/proxy/api/status")
+            ).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_inventory_for_plugins_reuses_core_devices(client):
+    await _register_example(client)
+    # Build a minimal inventory: cluster -> rack -> device.
+    cluster = (
+        await client.post("/api/clusters", json={"name": "C1"})
+    ).json()
+    rack = (
+        await client.post(
+            "/api/racks", json={"name": "R1", "cluster_id": cluster["id"]}
+        )
+    ).json()
+    await client.post(
+        "/api/devices",
+        json={
+            "hostname": "srv-01",
+            "rack_id": rack["id"],
+            "device_type": "SERVER",
+            "vendor": "Dell",
+        },
+    )
+    servers = await client.get("/api/plugins/inventory/servers")
+    assert servers.status_code == 200
+    rows = servers.json()
+    assert len(rows) == 1
+    row = rows[0]
+    assert row["hostname"] == "srv-01"
+    assert row["rack"] == "R1"
+    assert row["cluster"] == "C1"
+    assert row["vendor"] == "Dell"
+    # Never leak credentials through the inventory view.
+    assert "ilo_password" not in row and "ssh_password" not in row
+
+
+@pytest.mark.asyncio
+async def test_job_contract_end_to_end_through_proxy(client):
+    """Create a job through the Core proxy, poll it to completion, fetch results."""
+    import asyncio
+
+    await _register_example(client)
+    # Keep the reference job fast for the test.
+    example_plugin.JOB_DURATION_SECONDS = 0.2
+
+    created = await client.post(
+        "/api/plugins/example-plugin/proxy/api/jobs",
+        json={"server_id": "srv-xyz", "action": "inspect"},
+    )
+    assert created.status_code == 202
+    job = created.json()
+    assert job["state"] == "queued"
+    job_id = job["id"]
+
+    state = job["state"]
+    for _ in range(50):
+        await asyncio.sleep(0.1)
+        state = (
+            await client.get(f"/api/plugins/example-plugin/proxy/api/jobs/{job_id}")
+        ).json()["state"]
+        if state == "completed":
+            break
+    assert state == "completed"
+
+    results = await client.get(
+        f"/api/plugins/example-plugin/proxy/api/jobs/{job_id}/results"
+    )
+    assert results.status_code == 200
+    assert results.json()["results"]["serverId"] == "srv-xyz"
+
+
+@pytest.mark.asyncio
+async def test_job_cancel_through_proxy(client):
+    await _register_example(client)
+    example_plugin.JOB_DURATION_SECONDS = 5
+
+    job = (
+        await client.post(
+            "/api/plugins/example-plugin/proxy/api/jobs",
+            json={"action": "collect"},
+        )
+    ).json()
+    cancelled = await client.post(
+        f"/api/plugins/example-plugin/proxy/api/jobs/{job['id']}/cancel"
+    )
+    assert cancelled.status_code == 200
 
 
 @pytest.mark.asyncio

@@ -50,6 +50,7 @@ interface MenuSection {
 const TOP_MENU: MenuItem[] = [
   { to: "/", label: "Dashboard", Icon: LayoutDashboard, permission: "dashboard.view" },
   { to: "/search", label: "Inventory Search", Icon: Search, permission: "inventory.view" },
+  { to: "/plugins", label: "Plugins", Icon: Puzzle, permission: "plugin.view" },
 ];
 
 const SECTIONS: MenuSection[] = [
@@ -89,7 +90,7 @@ const SECTIONS: MenuSection[] = [
     Icon: Settings,
     items: [
       { to: "/admin/credentials", label: "Credentials", Icon: KeyRound, permission: "credential.view" },
-      { to: "/admin/plugins", label: "Plugins", Icon: Puzzle, permission: "plugin.view" },
+      { to: "/admin/plugins", label: "Plugin Registry", Icon: Puzzle, permission: "plugin.view" },
     ],
   },
   {

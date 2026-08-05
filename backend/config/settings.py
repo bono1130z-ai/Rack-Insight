@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # Application
     app_name: str = "Rack Insight"
-    app_version: str = "1.4.0"
+    app_version: str = "1.5.0"
     debug: bool = False
     api_prefix: str = "/api"
     cors_origins: str = "http://localhost:5173,http://localhost:3000,http://localhost"

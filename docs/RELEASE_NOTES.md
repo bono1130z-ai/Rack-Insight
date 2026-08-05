@@ -1,5 +1,46 @@
 # Release Notes
 
+## 1.5.0 — Plugin Platform (Backend + Frontend)
+
+Extends the backend-only plugin system into a full **Backend + Frontend Plugin
+Platform**. A plugin can now ship its own **frontend**, embedded by the Core as a
+same-origin **iframe**, alongside its backend API — still as an independent
+container, still added **without modifying Core**. Fully backward compatible: a
+plugin with no `ui` in its manifest behaves exactly as before.
+
+### What changed
+
+- **Manifest UI descriptor** — `ui: { type: "iframe", path, title }`. Parsed and
+  surfaced on `PluginResponse.ui`; absent ⇒ backend-only.
+- **Core UI proxy** — `GET /api/plugins/{name}/ui/{path}` serves the plugin's own
+  frontend same-origin (with `Content-Security-Policy: frame-ancestors 'self'`),
+  so the browser never learns the plugin's Service DNS name. The existing API
+  proxy (`…/proxy/…`) is unchanged.
+- **Plugin-UI cookie** — `POST /api/plugins/ui-session` mints a short-lived,
+  HttpOnly, `SameSite=Strict`, `Path=/api/plugins` cookie so an iframe (which
+  cannot carry a Bearer header) authenticates same-origin. Both proxies accept
+  cookie **or** Bearer (`get_current_user_flexible`); RBAC is unchanged.
+- **Inventory for plugins** — `GET /api/plugins/inventory/servers` exposes a
+  read-only, credential-free view of the Core inventory, so a plugin never
+  replicates devices in its own DB.
+- **Long-running Job Contract** — documented and demonstrated: `POST /api/jobs`,
+  `GET /api/jobs/{id}`, `GET /api/jobs/{id}/results`, cancel; states
+  `queued → running → completed | failed | cancelled`.
+- **Reference plugin** — `plugins/example-plugin` is now a full template: backend
+  API, in-memory jobs, and a self-contained `/ui/` frontend that lists Core
+  inventory and runs jobs through the Core proxy.
+- **Core frontend** — a top-level **Plugins** launcher (list + health + embedded
+  iframe); **Administration → Plugins** kept as **Plugin Registry**.
+- **Docs** — the Plugin Developer Guide is rewritten as a 25-section platform
+  guide (UI proxy, iframe auth, inventory, jobs, security, and a safe
+  "Server Script Runner" case study). No SSH capability is shipped.
+
+### Compatibility
+
+Backward compatible. No existing API was renamed or removed; DB schema, Auth,
+RBAC, and Inventory are reused as-is. No Module Federation, extra microservices,
+message brokers, or per-plugin inventory DBs were introduced.
+
 ## Unreleased — Kubernetes / ArgoCD Deployment Architecture
 
 A **deployment-architecture migration**: the official testbed/production runtime

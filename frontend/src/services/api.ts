@@ -27,6 +27,7 @@ import type {
   DeviceTemplate,
   Me,
   Permission,
+  PluginUiSession,
   RackLayout,
   RackSummary,
   Role,
@@ -210,7 +211,7 @@ export const api = {
   dashboardAlerts: () => request<DashboardAlerts>("/dashboard/alerts"),
   dashboardHealth: () => request<DashboardHealth>("/dashboard/health"),
 
-  // --- Plugins (Plugin Architecture Foundation) ---
+  // --- Plugins (Plugin Platform) ---
   plugins: () => request<Plugin[]>("/plugins"),
   plugin: (id: string) => request<Plugin>(`/plugins/${id}`),
   createPlugin: (payload: Record<string, unknown>) =>
@@ -220,6 +221,10 @@ export const api = {
   deletePlugin: (id: string) => request<void>(`/plugins/${id}`, { method: "DELETE" }),
   pluginHealthCheck: (id: string) =>
     request<Plugin>(`/plugins/${id}/health-check`, { method: "POST" }),
+  // Mints the short-lived HttpOnly cookie the plugin iframe uses to authenticate
+  // same-origin (an iframe navigation cannot carry the SPA's Bearer token).
+  createPluginUiSession: () =>
+    request<PluginUiSession>("/plugins/ui-session", { method: "POST" }),
 
   alertSettings: () => request<AlertSettings>("/lifecycle/alert-settings"),
   updateAlertSettings: (payload: AlertSettings) =>

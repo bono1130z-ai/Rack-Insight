@@ -22,6 +22,7 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { HistoryPage } from "@/pages/HistoryPage";
 import { DeviceDetailPage } from "@/pages/DeviceDetailPage";
 import { LoginPage } from "@/pages/LoginPage";
+import { PluginLauncherPage } from "@/pages/PluginLauncherPage";
 import { RackDetailPage } from "@/pages/RackDetailPage";
 import { RackListPage } from "@/pages/RackListPage";
 import { SearchPage } from "@/pages/SearchPage";
@@ -68,6 +69,22 @@ export default function App() {
               }
             />
             <Route path="/devices/:deviceId" element={<DeviceDetailPage />} />
+            <Route
+              path="/plugins"
+              element={
+                <RequirePermission permission="plugin.view">
+                  <PluginLauncherPage />
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/plugins/:name"
+              element={
+                <RequirePermission permission="plugin.view">
+                  <PluginLauncherPage />
+                </RequirePermission>
+              }
+            />
             <Route
               path="/admin/clusters"
               element={

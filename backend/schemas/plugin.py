@@ -16,6 +16,21 @@ def _camel(field_name: str) -> str:
     return head + "".join(word.capitalize() for word in tail)
 
 
+class PluginUi(BaseModel):
+    """UI metadata: how the Core embeds the plugin's own frontend.
+
+    Only ``iframe`` is supported (deliberately no Module Federation / runtime
+    bundle injection). ``path`` is the plugin's UI entrypoint, which the Core
+    serves same-origin via ``/api/plugins/{name}/ui/``.
+    """
+
+    model_config = ConfigDict(alias_generator=_camel, populate_by_name=True, extra="ignore")
+
+    type: str = "iframe"
+    path: str = "/ui/"
+    title: str | None = None
+
+
 class PluginManifest(BaseModel):
     """The contract a plugin advertises. Forward-compatible: unknown fields are
     ignored so newer plugins never break an older Core."""
@@ -30,6 +45,8 @@ class PluginManifest(BaseModel):
     health_endpoint: str = "/healthz"
     ready_endpoint: str = "/readyz"
     manifest_endpoint: str = "/plugin/manifest"
+    # Optional embedded frontend (iframe). Absent -> the plugin is backend-only.
+    ui: PluginUi | None = None
     # Reserved for future dynamic extension (not consumed by this patch).
     routes: list[dict] = Field(default_factory=list)
     permissions: list[str] = Field(default_factory=list)
@@ -69,5 +86,34 @@ class PluginResponse(BaseModel):
     last_success_at: datetime | None
     last_failure_at: datetime | None
     failure_reason: str | None
+    # Parsed from the cached manifest (None if the plugin exposes no UI).
+    ui: PluginUi | None = None
     created_at: datetime
     updated_at: datetime
+
+
+class PluginInventoryServer(BaseModel):
+    """A read-only view of one Core inventory server, exposed to plugins through
+    the Core proxy so a plugin never replicates the inventory in its own DB.
+
+    Serialized camelCase to match the rest of the plugin-facing contract
+    (manifest, job responses)."""
+
+    model_config = ConfigDict(alias_generator=_camel, populate_by_name=True)
+
+    id: uuid.UUID
+    hostname: str
+    display_name: str | None = None
+    management_ip: str | None = None
+    device_type: str
+    vendor: str | None = None
+    model: str | None = None
+    status: str
+    rack: str | None = None
+    cluster: str | None = None
+
+
+class PluginUiSession(BaseModel):
+    """Result of minting the short-lived plugin-UI cookie."""
+
+    expires_in: int

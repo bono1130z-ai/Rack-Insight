@@ -406,8 +406,14 @@ export interface AlertSettings {
   consecutive_failures_threshold: number;
 }
 
-// --- Plugins (Plugin Architecture Foundation) ---
+// --- Plugins (Plugin Platform) ---
 export type PluginStatus = "HEALTHY" | "UNHEALTHY" | "UNKNOWN" | "DISABLED";
+
+export interface PluginUi {
+  type: string;
+  path: string;
+  title: string | null;
+}
 
 export interface Plugin {
   id: string;
@@ -424,8 +430,13 @@ export interface Plugin {
   last_success_at: string | null;
   last_failure_at: string | null;
   failure_reason: string | null;
+  ui: PluginUi | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface PluginUiSession {
+  expires_in: number;
 }
 
 export interface CollectorDeviceStatus {

@@ -24,7 +24,7 @@ from models.plugin import (
     PLUGIN_STATUS_UNHEALTHY,
     PLUGIN_STATUS_UNKNOWN,
 )
-from schemas.plugin import PluginCreate, PluginUpdate
+from schemas.plugin import PluginCreate, PluginResponse, PluginUi, PluginUpdate
 from services import plugin_client
 from services.audit_service import (
     ACTION_CREATE,
@@ -38,6 +38,30 @@ from utils.logging import get_logger
 logger = get_logger(__name__)
 
 ENTITY_PLUGIN = "plugin"
+
+
+def parse_ui(plugin: Plugin) -> PluginUi | None:
+    """Extract the UI descriptor from the plugin's cached manifest (or None)."""
+    if not plugin.manifest:
+        return None
+    try:
+        data = json.loads(plugin.manifest)
+    except (ValueError, TypeError):
+        return None
+    ui = data.get("ui")
+    if not isinstance(ui, dict):
+        return None
+    try:
+        return PluginUi.model_validate(ui)
+    except Exception:
+        return None
+
+
+def to_response(plugin: Plugin) -> PluginResponse:
+    """Serialize a plugin, enriching it with the parsed UI descriptor."""
+    response = PluginResponse.model_validate(plugin)
+    response.ui = parse_ui(plugin)
+    return response
 
 
 async def get_by_name(db: AsyncSession, name: str) -> Plugin | None:
